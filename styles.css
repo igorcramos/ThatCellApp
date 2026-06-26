@@ -43,6 +43,23 @@ textarea {
   background: var(--surface);
 }
 
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.app-logo {
+  width: clamp(50px, 7vw, 70px);
+  height: clamp(50px, 7vw, 70px);
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  object-fit: cover;
+  background: #ffffff;
+}
+
 .app-tagline {
   margin: 7px 0 0;
   color: var(--accent);
