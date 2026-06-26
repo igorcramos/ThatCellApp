@@ -1,4 +1,4 @@
-# CellApp
+# ThatCellApp
 
 Simple web app for cell culture tracking using Supabase.
 

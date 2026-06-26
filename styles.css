@@ -43,12 +43,13 @@ textarea {
   background: var(--surface);
 }
 
-.eyebrow {
-  margin: 0 0 4px;
+.app-tagline {
+  margin: 7px 0 0;
   color: var(--accent);
   font-size: 0.84rem;
   font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 h1,
