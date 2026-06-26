@@ -1,0 +1,881 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CellApp</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Cell culture tracking</p>
+        <h1>CellApp</h1>
+      </div>
+      <div class="status-stack">
+        <div class="status-pill" id="connectionStatus">Connecting</div>
+        <div class="last-updated" id="lastUpdated">Last updated: never</div>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="App sections">
+      <button class="tab is-active" data-view="todayView" type="button">Today</button>
+      <button class="tab" data-view="linesView" type="button">Cell lines</button>
+      <button class="tab" data-view="culturesView" type="button">Cultures & plates</button>
+      <button class="tab" data-view="cryoView" type="button">Cryostock</button>
+      <button class="tab" data-view="projectsView" type="button">Projects</button>
+      <button class="tab" data-view="protocolsView" type="button">Protocols</button>
+      <button class="tab" data-view="differentiationsView" type="button">Differentiations</button>
+      <button class="tab" data-view="eventsView" type="button">Activity</button>
+    </nav>
+
+    <main>
+      <section class="view is-active" id="todayView">
+        <div class="section-heading">
+          <div>
+            <h2>Today overview</h2>
+            <p>Active cultures and recently recorded activity.</p>
+          </div>
+          <button class="secondary-button" id="refreshToday" type="button">Refresh</button>
+        </div>
+        <div class="summary-grid">
+          <div class="metric">
+            <span>Cell lines</span>
+            <strong id="lineCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>Active cultures</span>
+            <strong id="activeCultureCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>Plates</span>
+            <strong id="vesselCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>Cryovials</span>
+            <strong id="cryoVialCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>Differentiations</span>
+            <strong id="differentiationCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>Events</span>
+            <strong id="eventCount">0</strong>
+          </div>
+        </div>
+        <div class="table-panel">
+          <h3>Ongoing cultures</h3>
+          <div id="activeCulturesList" class="item-list"></div>
+        </div>
+      </section>
+
+      <section class="view" id="linesView">
+        <div class="section-heading">
+          <div>
+            <h2>Available cell lines</h2>
+            <p>Add cell lines before they enter culture.</p>
+          </div>
+        </div>
+        <form class="form-grid" id="cellLineForm">
+          <input name="id" type="hidden">
+          <label>
+            Identifier
+            <input name="identifier" required placeholder="Example: HEK293">
+          </label>
+          <label>
+            Clone
+            <input name="clone" placeholder="Example: C1">
+          </label>
+          <label>
+            Species
+            <select name="species" id="speciesSelect">
+              <option value="">Not specified</option>
+              <option value="Human">Human</option>
+              <option value="Mice">Mice</option>
+              <option value="Rat">Rat</option>
+              <option value="__add">Add...</option>
+            </select>
+          </label>
+          <label class="is-hidden" id="customSpeciesLabel">
+            Custom species
+            <input name="custom_species" placeholder="Enter species">
+          </label>
+          <label>
+            Cell type
+            <select name="cell_type" id="cellTypeSelect">
+              <option value="">Not specified</option>
+              <option value="iPSC">iPSC</option>
+              <option value="Fibroblast">Fibroblast</option>
+              <option value="Neuroblastoma">Neuroblastoma</option>
+              <option value="Embryonic Kidney">Embryonic Kidney</option>
+              <option value="__add">Add...</option>
+            </select>
+          </label>
+          <label class="is-hidden" id="customCellTypeLabel">
+            Custom cell type
+            <input name="custom_cell_type" placeholder="Enter cell type">
+          </label>
+          <label>
+            Source
+            <input name="source" placeholder="Example: ATCC, collaborator, biobank">
+          </label>
+          <fieldset class="wide form-section">
+            <legend>Modifications</legend>
+            <label class="checkbox-label">
+              <input name="has_crispr" id="crisprCheckbox" type="checkbox">
+              CRISPR?
+            </label>
+            <div class="conditional-grid is-hidden" id="crisprFields">
+              <label>
+                Target
+                <input name="crispr_target" placeholder="Example: AAVS1">
+              </label>
+              <label>
+                sgRNA
+                <input name="crispr_sgrna" placeholder="sgRNA sequence or ID">
+              </label>
+              <label>
+                Variant
+                <input name="crispr_variant" placeholder="Example: KO, KI, point mutation">
+              </label>
+              <label>
+                HCMG
+                <input name="crispr_hcmg" placeholder="HCMG">
+              </label>
+            </div>
+            <label class="checkbox-label">
+              <input name="has_transgene" id="transgeneCheckbox" type="checkbox">
+              Transgene expression
+            </label>
+            <div class="conditional-grid is-hidden" id="transgeneFields">
+              <label>
+                Transgene
+                <input name="transgene" placeholder="Example: MAP2-GFP">
+              </label>
+              <label>
+                Fluorescence
+                <select name="fluorescence" id="fluorescenceSelect">
+                  <option value="">No</option>
+                  <option value="Red">Red</option>
+                  <option value="Green">Green</option>
+                  <option value="Yellow">Yellow</option>
+                  <option value="Blue">Blue</option>
+                  <option value="__add">Add...</option>
+                </select>
+              </label>
+              <label class="is-hidden" id="customFluorescenceLabel">
+                Custom fluorescence
+                <input name="custom_fluorescence" placeholder="Enter fluorescence">
+              </label>
+              <label>
+                Marker of
+                <input name="marker_of" placeholder="Example: Neurons, nuclei, membrane">
+              </label>
+              <label>
+                Plasmid
+                <input name="plasmid" placeholder="Plasmid name or ID">
+              </label>
+              <label class="wide">
+                Transgene notes
+                <textarea name="transgene_notes" rows="3" placeholder="Expression notes"></textarea>
+              </label>
+            </div>
+          </fieldset>
+          <label class="wide">
+            Notes
+            <textarea name="notes" rows="3" placeholder="Free-form notes"></textarea>
+          </label>
+          <div class="form-actions wide">
+            <button class="primary-button" id="cellLineSubmitButton" type="submit">Save cell line</button>
+            <button class="secondary-button is-hidden" id="cancelCellLineEdit" type="button">Cancel edit</button>
+          </div>
+        </form>
+        <div class="table-panel">
+          <h3>Saved cell lines</h3>
+          <div id="cellLinesList" class="item-list"></div>
+        </div>
+      </section>
+
+      <section class="view" id="culturesView">
+        <div class="section-heading">
+          <div>
+            <h2>Cultures & plates</h2>
+            <p>Start a culture, add plates, and map wells from one workflow.</p>
+          </div>
+        </div>
+        <form class="form-grid" id="cultureForm">
+          <input name="id" type="hidden">
+          <label>
+            Cell line
+            <select name="cell_line_id" id="cultureCellLineSelect" required></select>
+          </label>
+          <label>
+            Culture name
+            <input name="culture_name" placeholder="Example: HEK293 P12 T75">
+          </label>
+          <label>
+            Project
+            <select name="project" id="cultureProjectSelect">
+              <option value="">Not specified</option>
+              <option value="TBCK">TBCK</option>
+              <option value="APOE-TAU">APOE-TAU</option>
+              <option value="__add">Add...</option>
+            </select>
+          </label>
+          <label class="is-hidden" id="customCultureProjectLabel">
+            Custom project
+            <input name="custom_project" placeholder="Enter project">
+          </label>
+          <label>
+            Start date
+            <input name="start_date" type="date">
+          </label>
+          <label>
+            Current passage
+            <input name="passage_number" type="number" min="0" step="1" placeholder="Example: 12">
+          </label>
+          <label>
+            Initial cell type
+            <select name="initial_cell_type" id="initialCellTypeSelect">
+              <option value="">Not specified</option>
+              <option value="iPSC">iPSC</option>
+              <option value="NPC">NPC</option>
+              <option value="HPC">HPC</option>
+              <option value="HEK">HEK</option>
+              <option value="__add">Add...</option>
+            </select>
+          </label>
+          <label class="is-hidden" id="customInitialCellTypeLabel">
+            Custom initial cell type
+            <input name="custom_initial_cell_type" placeholder="Enter cell type">
+          </label>
+          <label>
+            Initial plate type
+            <select name="vessel_type">
+              <option value="">Not specified</option>
+              <option value="6 well">6 well</option>
+              <option value="12 well">12 well</option>
+              <option value="24 well">24 well</option>
+              <option value="96 well">96 well</option>
+              <option value="60mm">60mm</option>
+              <option value="100mm">100mm</option>
+              <option value="150mm">150mm</option>
+            </select>
+          </label>
+          <label>
+            Number of plates
+            <input name="plate_count" type="number" min="0" step="1" placeholder="Optional">
+          </label>
+          <label class="checkbox-label checkbox-field">
+            <input name="whole_plate" type="checkbox" checked>
+            Whole plate same condition
+          </label>
+          <label>
+            Medium
+            <input name="medium" placeholder="Example: DMEM + 10% FBS">
+          </label>
+          <label>
+            Status
+            <select name="status">
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+              <option value="frozen">Frozen</option>
+              <option value="discarded">Discarded</option>
+              <option value="contaminated">Contaminated</option>
+              <option value="completed">Completed</option>
+            </select>
+          </label>
+          <label>
+            Location
+            <input name="location" placeholder="Example: Incubator 1, shelf B">
+          </label>
+          <label class="wide">
+            Notes
+            <textarea name="notes" rows="3" placeholder="Initial notes"></textarea>
+          </label>
+          <div class="form-actions wide">
+            <button class="primary-button" id="cultureSubmitButton" type="submit">Start culture</button>
+            <button class="secondary-button is-hidden" id="createPlateFromCultureButton" type="button">Create plate from culture</button>
+            <button class="secondary-button is-hidden" id="cancelCultureEdit" type="button">Cancel edit</button>
+          </div>
+        </form>
+        <div class="table-panel">
+          <h3>Saved cultures</h3>
+          <div id="culturesList" class="item-list"></div>
+        </div>
+        <div class="table-panel">
+          <div class="panel-title-row">
+            <h3>Plates</h3>
+            <button class="secondary-button" id="addPlateButton" type="button">Add plate</button>
+          </div>
+          <div id="vesselsList" class="item-list"></div>
+          <div class="plate-map-panel is-hidden" id="plateMapPanel">
+            <div class="panel-title-row">
+              <div>
+                <h3 id="plateMapTitle">Plate map</h3>
+                <p id="plateMapSubtitle" class="panel-subtitle"></p>
+              </div>
+            </div>
+            <div id="plateMapGrid" class="plate-map"></div>
+            <form class="form-grid well-form is-hidden" id="wellForm">
+              <input name="vessel_id" type="hidden">
+              <label>
+                Selected wells
+                <input name="wells" readonly>
+              </label>
+              <label>
+                Cell line
+                <select name="cell_line_id" id="wellCellLineSelect"></select>
+              </label>
+              <label>
+                Culture
+                <select name="culture_id" id="wellCultureSelect"></select>
+              </label>
+              <label>
+                Condition
+                <input name="condition_label" placeholder="Example: Control, CHIR, clone A">
+              </label>
+              <label>
+                Treatment
+                <input name="treatment" placeholder="Example: Dox, BMP4, vehicle">
+              </label>
+              <label>
+                Dose
+                <input name="dose" placeholder="Example: 2 uM, 10 ng/mL">
+              </label>
+              <label>
+                Medium
+                <input name="medium" placeholder="Example: N2B27">
+              </label>
+              <label class="wide">
+                Notes
+                <textarea name="notes" rows="3" placeholder="Well-specific notes"></textarea>
+              </label>
+              <div class="form-actions wide">
+                <button class="primary-button" type="submit">Save selected wells</button>
+                <button class="secondary-button" id="clearWellForm" type="button">Clear selection</button>
+                <button class="icon-button danger-button" id="deleteSelectedWells" type="button" title="Delete selected wells" aria-label="Delete selected wells">&#128465;</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <form class="form-grid is-hidden" id="vesselForm">
+          <input name="id" type="hidden">
+          <label>
+            Plate name
+            <input name="name" required placeholder="Example: Plate A, Day -1 setup">
+          </label>
+          <label>
+            Plate type
+            <select name="vessel_type" id="vesselTypeSelect" required>
+              <option value="">Select type</option>
+              <option value="6 well">6 well</option>
+              <option value="12 well">12 well</option>
+              <option value="24 well">24 well</option>
+              <option value="96 well">96 well</option>
+              <option value="60mm">60mm</option>
+              <option value="100mm">100mm</option>
+              <option value="150mm">150mm</option>
+            </select>
+          </label>
+          <div class="wide">
+            <div class="field-label">Cultures</div>
+            <div class="checkbox-grid" id="vesselCultureCheckboxes"></div>
+          </div>
+          <!-- Kept for compatibility with older code paths; checkbox list is the visible control. -->
+          <label class="is-hidden">
+            Cultures
+            <select name="culture_ids" id="vesselCultureSelect" multiple size="4"></select>
+          </label>
+          <label>
+            Location
+            <input name="location" placeholder="Example: Incubator 1, shelf B">
+          </label>
+          <label>
+            Status
+            <select name="status">
+              <option value="active">Active</option>
+              <option value="planned">Planned</option>
+              <option value="completed">Completed</option>
+              <option value="discarded">Discarded</option>
+            </select>
+          </label>
+          <label class="wide">
+            Notes
+            <textarea name="notes" rows="3" placeholder="Setup notes"></textarea>
+          </label>
+          <div class="form-actions wide">
+            <button class="primary-button" id="vesselSubmitButton" type="submit">Create plate</button>
+            <button class="secondary-button is-hidden" id="cancelVesselEdit" type="button">Cancel edit</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="view" id="cryoView">
+        <div class="section-heading">
+          <div>
+            <h2>Cryostock</h2>
+            <p>Map cryogenic boxes, freezer position, and every vial in storage.</p>
+          </div>
+        </div>
+        <form class="form-grid" id="cryoBoxForm">
+          <input name="id" type="hidden">
+          <label>
+            Box name
+            <input name="name" required placeholder="Example: Box iPSC A">
+          </label>
+          <label>
+            Freezer
+            <input name="freezer" required placeholder="Example: -80 Freezer 1">
+          </label>
+          <label>
+            Project
+            <select name="project" id="cryoProjectSelect">
+              <option value="">Not specified</option>
+              <option value="TBCK">TBCK</option>
+              <option value="APOE-TAU">APOE-TAU</option>
+              <option value="__add">Add...</option>
+            </select>
+          </label>
+          <label class="is-hidden" id="customCryoProjectLabel">
+            Custom project
+            <input name="custom_project" placeholder="Enter project">
+          </label>
+          <label>
+            Rack
+            <input name="rack" placeholder="Example: Rack 3">
+          </label>
+          <label>
+            Shelf
+            <input name="shelf" placeholder="Example: Shelf B">
+          </label>
+          <label>
+            Drawer
+            <input name="drawer" placeholder="Example: Drawer 2">
+          </label>
+          <label>
+            Box position
+            <input name="box_position" placeholder="Example: Slot 4">
+          </label>
+          <label>
+            Rows
+            <input name="rows_count" type="number" min="1" max="12" step="1" value="9">
+          </label>
+          <label>
+            Columns
+            <input name="columns_count" type="number" min="1" max="12" step="1" value="9">
+          </label>
+          <label class="wide">
+            Notes
+            <textarea name="notes" rows="3" placeholder="Box notes"></textarea>
+          </label>
+          <div class="form-actions wide">
+            <button class="primary-button" id="cryoBoxSubmitButton" type="submit">Save box</button>
+            <button class="secondary-button is-hidden" id="cancelCryoBoxEdit" type="button">Cancel edit</button>
+          </div>
+        </form>
+        <div class="table-panel">
+          <h3>Cryogenic boxes</h3>
+          <div id="cryoBoxesList" class="item-list"></div>
+          <div class="cryo-map-panel is-hidden" id="cryoMapPanel">
+            <div class="panel-title-row">
+              <div>
+                <h3 id="cryoMapTitle">Cryobox map</h3>
+                <p id="cryoMapSubtitle" class="panel-subtitle"></p>
+              </div>
+            </div>
+            <div id="cryoMapGrid" class="cryo-map"></div>
+            <form class="form-grid vial-form is-hidden" id="cryoVialForm">
+              <input name="box_id" type="hidden">
+              <label>
+                Selected positions
+                <input name="positions" readonly>
+              </label>
+              <label>
+                Cell line
+                <select name="cell_line_id" id="cryoCellLineSelect" required></select>
+              </label>
+              <label>
+                Cell type
+                <select name="cell_type" id="cryoCellTypeSelect">
+                  <option value="">Not specified</option>
+                  <option value="iPSC">iPSC</option>
+                  <option value="NPC">NPC</option>
+                  <option value="HPC">HPC</option>
+                  <option value="dCtO">dCtO</option>
+                  <option value="Other">Other</option>
+                  <option value="__add">Add...</option>
+                </select>
+              </label>
+              <label class="is-hidden" id="customCryoCellTypeLabel">
+                Custom cell type
+                <input name="custom_cell_type" placeholder="Enter cell type">
+              </label>
+              <label>
+                Freeze date
+                <input name="freeze_date" type="date">
+              </label>
+              <label>
+                Passage
+                <input name="passage_number" type="number" min="0" step="1">
+              </label>
+              <label>
+                Status
+                <select name="status">
+                  <option value="available">Available</option>
+                  <option value="reserved">Reserved</option>
+                  <option value="thawed">Thawed</option>
+                  <option value="discarded">Discarded</option>
+                </select>
+              </label>
+              <label>
+                Frozen by
+                <input name="frozen_by" placeholder="Example: Igor">
+              </label>
+              <label class="wide">
+                Notes
+                <textarea name="notes" rows="3" placeholder="Medium, vial count notes, recovery notes"></textarea>
+              </label>
+              <div class="form-actions wide">
+                <button class="primary-button" id="cryoVialSubmitButton" type="submit">Save selected vials</button>
+                <button class="secondary-button" id="clearCryoSelection" type="button">Clear selection</button>
+                <button class="icon-button danger-button" id="deleteSelectedVials" type="button" title="Delete selected vials" aria-label="Delete selected vials">&#128465;</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div class="table-panel">
+          <div class="panel-title-row">
+            <h3>Vial lookup</h3>
+            <button class="secondary-button" id="toggleCryoLookup" type="button" aria-expanded="false">Show lookup</button>
+          </div>
+          <div id="cryoLookupBody" class="is-hidden">
+            <label class="compact-search">
+              <span>Cell line</span>
+              <input id="cryoSearchInput" placeholder="Example: HEK293, C1, iPSC">
+            </label>
+            <div id="cryoSearchResults" class="item-list search-results"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="projectsView">
+        <div class="section-heading">
+          <div>
+            <h2>Projects</h2>
+            <p>Manage project labels, colors, active cultures, plates, and recent activity.</p>
+          </div>
+        </div>
+        <form class="form-grid" id="projectForm">
+          <input name="id" type="hidden">
+          <input name="original_name" type="hidden">
+          <label>
+            Project name
+            <input name="name" required placeholder="Example: TBCK">
+          </label>
+          <label>
+            Project color
+            <input name="color" type="color" value="#176f64">
+          </label>
+          <label class="wide">
+            Notes
+            <textarea name="notes" rows="3" placeholder="Project notes"></textarea>
+          </label>
+          <div class="form-actions wide">
+            <button class="primary-button" id="projectSubmitButton" type="submit">Save project</button>
+            <button class="secondary-button is-hidden" id="cancelProjectEdit" type="button">Cancel edit</button>
+          </div>
+        </form>
+        <div class="table-panel">
+          <div class="panel-title-row">
+            <h3>Project overview</h3>
+            <select id="projectViewFilter" aria-label="Filter project overview"></select>
+          </div>
+          <div id="projectsList" class="item-list"></div>
+        </div>
+      </section>
+
+      <section class="view" id="protocolsView">
+        <div class="section-heading">
+          <div>
+            <h2>Protocols</h2>
+            <p>Define reusable differentiation protocols and planned tasks.</p>
+          </div>
+        </div>
+        <form class="form-grid" id="protocolForm">
+          <input name="id" type="hidden">
+          <label>
+            Protocol name
+            <input name="name" required placeholder="Example: Microglia differentiation">
+          </label>
+          <label>
+            Project
+            <select name="project" id="protocolProjectSelect">
+              <option value="">Not specified</option>
+              <option value="TBCK">TBCK</option>
+              <option value="APOE-TAU">APOE-TAU</option>
+              <option value="__add">Add...</option>
+            </select>
+          </label>
+          <label class="is-hidden" id="customProtocolProjectLabel">
+            Custom project
+            <input name="custom_project" placeholder="Enter project">
+          </label>
+          <label>
+            Target cell type
+            <input name="target_cell_type" placeholder="Example: Microglia">
+          </label>
+          <label>
+            Version
+            <input name="version" placeholder="Example: v1.0">
+          </label>
+          <label>
+            Expected duration (days)
+            <input name="expected_duration_days" type="number" min="0" step="1">
+          </label>
+          <label class="wide">
+            Notes
+            <textarea name="notes" rows="3" placeholder="Protocol notes"></textarea>
+          </label>
+          <div class="form-actions wide">
+            <button class="primary-button" id="protocolSubmitButton" type="submit">Save protocol</button>
+            <button class="secondary-button is-hidden" id="cancelProtocolEdit" type="button">Cancel edit</button>
+          </div>
+        </form>
+        <div class="table-panel">
+          <h3>Saved protocols</h3>
+          <div id="protocolsList" class="item-list"></div>
+        </div>
+        <form class="form-grid" id="protocolTaskForm">
+          <input name="id" type="hidden">
+          <label>
+            Protocol
+            <select name="protocol_id" id="taskProtocolSelect" required></select>
+          </label>
+          <label>
+            Protocol day
+            <input name="task_day" type="number" step="1" required placeholder="Example: 0, 3, 7">
+          </label>
+          <label>
+            Task
+            <input name="title" required placeholder="Example: Add CHIR, medium change">
+          </label>
+          <label>
+            Task type
+            <select name="task_type">
+              <option value="Media change">Media change</option>
+              <option value="Factor addition">Factor addition</option>
+              <option value="Replating">Replating</option>
+              <option value="Observation">Observation</option>
+              <option value="Collection">Collection</option>
+              <option value="Endpoint">Endpoint</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+          <label>
+            Estimated duration (hours)
+            <input name="estimated_duration_hours" type="number" min="0" step="0.25" placeholder="Example: 1.5">
+          </label>
+          <label class="wide">
+            Notes
+            <textarea name="notes" rows="3" placeholder="Task details, reagents, timing notes"></textarea>
+          </label>
+          <div class="form-actions wide">
+            <button class="primary-button" id="protocolTaskSubmitButton" type="submit">Save task</button>
+            <button class="secondary-button is-hidden" id="cancelProtocolTaskEdit" type="button">Cancel edit</button>
+          </div>
+        </form>
+        <div class="table-panel">
+          <div class="panel-title-row">
+            <h3>Protocol tasks</h3>
+            <select id="protocolTaskProjectFilter" aria-label="Filter protocol tasks by project"></select>
+          </div>
+          <div id="protocolTasksList" class="item-list"></div>
+        </div>
+      </section>
+
+      <section class="view" id="differentiationsView">
+        <div class="section-heading">
+          <div>
+            <h2>Differentiations</h2>
+            <p>Start protocol runs from cultures, whole plates, or selected wells.</p>
+          </div>
+        </div>
+        <form class="form-grid" id="differentiationRunForm">
+          <input name="id" type="hidden">
+          <label>
+            Run name
+            <input name="run_name" required placeholder="Example: E3 microglia D0">
+          </label>
+          <label>
+            Project
+            <select name="project" id="runProjectSelect">
+              <option value="">Not specified</option>
+              <option value="TBCK">TBCK</option>
+              <option value="APOE-TAU">APOE-TAU</option>
+              <option value="__add">Add...</option>
+            </select>
+          </label>
+          <label class="is-hidden" id="customRunProjectLabel">
+            Custom project
+            <input name="custom_project" placeholder="Enter project">
+          </label>
+          <label>
+            Protocol
+            <select name="protocol_id" id="differentiationProtocolSelect" required></select>
+          </label>
+          <label>
+            Day 0 date
+            <input name="day_zero_date" type="date" required>
+          </label>
+          <label>
+            Source type
+            <select name="source_type" id="differentiationSourceType">
+              <option value="culture">Culture</option>
+              <option value="vessel">Whole plate</option>
+              <option value="wells">Selected wells</option>
+            </select>
+          </label>
+          <label id="differentiationCultureLabel">
+            Source culture
+            <select name="source_culture_id" id="differentiationCultureSelect"></select>
+          </label>
+          <label id="differentiationVesselLabel" class="is-hidden">
+            Source plate
+            <select name="source_vessel_id" id="differentiationVesselSelect"></select>
+          </label>
+          <div class="wide is-hidden" id="differentiationWellsPanel">
+            <div class="field-label">Source wells</div>
+            <div class="checkbox-grid" id="differentiationWellCheckboxes"></div>
+          </div>
+          <label>
+            Status
+            <select name="status">
+              <option value="active">Active</option>
+              <option value="planned">Planned</option>
+              <option value="paused">Paused</option>
+              <option value="completed">Completed</option>
+              <option value="failed">Failed</option>
+              <option value="discarded">Discarded</option>
+            </select>
+          </label>
+          <label class="wide">
+            Notes
+            <textarea name="notes" rows="3" placeholder="Run notes"></textarea>
+          </label>
+          <div class="form-actions wide">
+            <button class="primary-button" id="differentiationRunSubmitButton" type="submit">Start differentiation</button>
+            <button class="secondary-button is-hidden" id="cancelDifferentiationRunEdit" type="button">Cancel edit</button>
+          </div>
+        </form>
+        <div class="table-panel">
+          <h3>Differentiation runs</h3>
+          <div id="differentiationRunsList" class="item-list"></div>
+        </div>
+      </section>
+
+      <section class="view" id="eventsView">
+        <div class="section-heading">
+          <div>
+            <h2>Activity</h2>
+            <p>Record what happened today and follow the daily feed.</p>
+          </div>
+        </div>
+        <form class="form-grid" id="eventForm">
+          <input name="id" type="hidden">
+          <input name="record_kind" type="hidden">
+          <input name="photo_url" type="hidden">
+          <label>
+            Target type
+            <select name="activity_target_type" id="activityTargetTypeSelect">
+              <option value="cultures">Culture(s)</option>
+              <option value="vessel">Plate</option>
+            </select>
+          </label>
+          <div class="wide" id="eventCulturesPanel">
+            <div class="field-label">Cultures</div>
+            <div class="checkbox-grid" id="eventCultureCheckboxes"></div>
+          </div>
+          <label id="eventVesselLabel" class="is-hidden">
+            Plate
+            <select name="vessel_id" id="eventVesselSelect"></select>
+          </label>
+          <label class="is-hidden">
+            Cultures
+            <select name="culture_id" id="eventCultureSelect" multiple required size="5"></select>
+          </label>
+          <label>
+            Event type
+            <select name="event_type" id="eventTypeSelect">
+              <option value="Observation">Observation</option>
+              <option value="Media change">Media change</option>
+              <option value="Passage">Passage</option>
+              <option value="Plating">Plating</option>
+              <option value="Factor addition">Factor addition</option>
+              <option value="Replating">Replating</option>
+              <option value="Collection">Collection</option>
+              <option value="Endpoint">Endpoint</option>
+              <option value="Freezing">Freezing</option>
+              <option value="Thawing">Thawing</option>
+              <option value="Contamination">Contamination</option>
+              <option value="Discard">Discard</option>
+              <option value="Other">Other</option>
+            </select>
+          </label>
+          <label>
+            Date
+            <input name="event_date" id="differentiationEventDate" type="date">
+          </label>
+          <label id="eventPassageLabel">
+            Passage
+            <input name="passage_number" type="number" min="0" step="1">
+          </label>
+          <label>
+            Performed by
+            <select name="performed_by" id="performedBySelect">
+              <option value="">Not specified</option>
+              <option value="Igor">Igor</option>
+              <option value="Nico">Nico</option>
+              <option value="Nainika">Nainika</option>
+              <option value="Hannah">Hannah</option>
+              <option value="__add">Add...</option>
+            </select>
+          </label>
+          <label class="is-hidden" id="customPerformedByLabel">
+            Custom person
+            <input name="custom_performed_by" placeholder="Enter name">
+          </label>
+          <label class="wide">
+            Notes
+            <textarea name="notes" rows="3" placeholder="What happened?"></textarea>
+          </label>
+          <label class="wide">
+            Optional photo
+            <input name="photo" type="file" accept="image/*">
+          </label>
+          <div class="form-actions wide">
+            <button class="primary-button" id="eventSubmitButton" type="submit">Record event</button>
+            <button class="secondary-button is-hidden" id="cancelEventEdit" type="button">Cancel edit</button>
+          </div>
+        </form>
+        <div class="table-panel">
+          <div class="panel-title-row">
+            <h3>Daily feed</h3>
+            <div class="filter-row">
+              <select id="historyProjectFilter" aria-label="Filter project"></select>
+              <select id="historyCultureFilter" aria-label="Filter culture"></select>
+            </div>
+          </div>
+          <div id="eventsList" class="timeline"></div>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="supabase-js.min.js?v=20260626c"></script>
+    <script src="supabase-local.js?v=20260626c"></script>
+    <script src="app.js?v=20260626c"></script>
+  </body>
+</html>
