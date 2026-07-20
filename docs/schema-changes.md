@@ -57,7 +57,8 @@ For the prototype, most new fields should be nullable. That keeps the forms flex
 The current cell line model uses:
 
 - `identifier`: required, such as `HEK293`
+- `full_name`: optional descriptive name; when empty, downstream steps use the identifier/clone routine name
 - `clone`: optional, such as `C1`
-- `name`: stored compatibility/display value generated from identifier plus clone
+- `name`: stored compatibility/display value generated from full name, or identifier plus clone when full name is empty
 - `has_crispr`: whether CRISPR details apply
 - `has_transgene`: whether transgene expression details apply

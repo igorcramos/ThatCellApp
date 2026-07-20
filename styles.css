@@ -109,6 +109,22 @@ h3 {
   gap: 5px;
 }
 
+.user-strip {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.compact-button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 0.8rem;
+}
+
 .last-updated {
   color: var(--muted);
   font-size: 0.78rem;
@@ -156,6 +172,27 @@ main {
   width: min(1180px, 100%);
   margin: 0 auto;
   padding: 24px clamp(18px, 4vw, 44px) 48px;
+}
+
+.auth-panel {
+  width: min(520px, 100%);
+  margin: 0 auto;
+  padding: 42px clamp(18px, 4vw, 44px);
+}
+
+.auth-card {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.auth-card p {
+  margin-bottom: 0;
+  color: var(--muted);
 }
 
 .view {
@@ -297,11 +334,38 @@ label {
   background: var(--surface-muted);
 }
 
+.plate-setup-section {
+  padding: 12px;
+}
+
+.plate-setup-list {
+  display: grid;
+  gap: 10px;
+}
+
+.plate-setup-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.1fr) minmax(90px, 0.6fr) minmax(130px, 0.8fr) minmax(160px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfb;
+}
+
 .form-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+}
+
+.export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .is-hidden {
@@ -851,6 +915,10 @@ textarea:focus {
   .form-actions .primary-button,
   .form-actions .secondary-button {
     width: 100%;
+  }
+
+  .plate-setup-row {
+    grid-template-columns: 1fr;
   }
 
   .compact-search,

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ThatCellApp</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=20260714a">
   </head>
   <body>
     <header class="app-header">
@@ -16,12 +16,38 @@
         </div>
       </div>
       <div class="status-stack">
+        <div class="user-strip is-hidden" id="userStrip">
+          <span id="currentUserLabel"></span>
+          <button class="secondary-button compact-button" id="signOutButton" type="button">Sign out</button>
+        </div>
         <div class="status-pill" id="connectionStatus">Connecting</div>
         <div class="last-updated" id="lastUpdated">Last updated: never</div>
       </div>
     </header>
 
-    <nav class="tabs" aria-label="App sections">
+    <section class="auth-panel is-hidden" id="authPanel">
+      <form class="auth-card" id="authForm">
+        <div>
+          <h2>Sign in</h2>
+          <p>Use your lab account to access assigned projects and cultures.</p>
+        </div>
+        <label>
+          Email
+          <input name="email" type="email" autocomplete="email" required>
+        </label>
+        <label>
+          Password
+          <input name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <div class="form-actions">
+          <button class="primary-button" name="mode" value="signin" type="submit">Sign in</button>
+          <button class="secondary-button" name="mode" value="signup" type="submit">Create account</button>
+          <button class="secondary-button" id="magicLinkButton" type="button">Send login link</button>
+        </div>
+      </form>
+    </section>
+
+    <nav class="tabs app-shell is-hidden" aria-label="App sections">
       <button class="tab is-active" data-view="todayView" type="button">Today</button>
       <button class="tab" data-view="linesView" type="button">Cell lines</button>
       <button class="tab" data-view="culturesView" type="button">Cultures & plates</button>
@@ -32,7 +58,7 @@
       <button class="tab" data-view="eventsView" type="button">Activity</button>
     </nav>
 
-    <main>
+    <main class="app-shell is-hidden">
       <section class="view is-active" id="todayView">
         <div class="section-heading">
           <div>
@@ -83,8 +109,12 @@
         <form class="form-grid" id="cellLineForm">
           <input name="id" type="hidden">
           <label>
-            Identifier
+            Identifier / routine name
             <input name="identifier" required placeholder="Example: HEK293">
+          </label>
+          <label>
+            Full name
+            <input name="full_name" placeholder="Example: Human embryonic kidney 293">
           </label>
           <label>
             Clone
@@ -253,27 +283,15 @@
             Custom initial cell type
             <input name="custom_initial_cell_type" placeholder="Enter cell type">
           </label>
-          <label>
-            Initial plate type
-            <select name="vessel_type">
-              <option value="">Not specified</option>
-              <option value="6 well">6 well</option>
-              <option value="12 well">12 well</option>
-              <option value="24 well">24 well</option>
-              <option value="96 well">96 well</option>
-              <option value="60mm">60mm</option>
-              <option value="100mm">100mm</option>
-              <option value="150mm">150mm</option>
-            </select>
-          </label>
-          <label>
-            Number of plates
-            <input name="plate_count" type="number" min="0" step="1" placeholder="Optional">
-          </label>
-          <label class="checkbox-label checkbox-field">
-            <input name="whole_plate" type="checkbox" checked>
-            Whole plate same condition
-          </label>
+          <div class="wide form-section plate-setup-section">
+            <div class="panel-title-row">
+              <div>
+                <div class="field-label">Initial plates</div>
+              </div>
+              <button class="secondary-button compact-button" id="addPlateSetup" type="button">Add plate setup</button>
+            </div>
+            <div class="plate-setup-list" id="plateSetupList"></div>
+          </div>
           <label>
             Medium
             <input name="medium" placeholder="Example: DMEM + 10% FBS">
@@ -297,6 +315,10 @@
             Notes
             <textarea name="notes" rows="3" placeholder="Initial notes"></textarea>
           </label>
+          <div class="wide admin-only is-hidden">
+            <div class="field-label">Culture members</div>
+            <div class="checkbox-grid" id="cultureMemberCheckboxes"></div>
+          </div>
           <div class="form-actions wide">
             <button class="primary-button" id="cultureSubmitButton" type="submit">Start culture</button>
             <button class="secondary-button is-hidden" id="createPlateFromCultureButton" type="button">Create plate from culture</button>
@@ -487,6 +509,10 @@
                 <h3 id="cryoMapTitle">Cryobox map</h3>
                 <p id="cryoMapSubtitle" class="panel-subtitle"></p>
               </div>
+              <div class="export-actions">
+                <button class="secondary-button compact-button" id="downloadCryoCsv" type="button">CSV</button>
+                <button class="secondary-button compact-button" id="downloadCryoXls" type="button">XLS</button>
+              </div>
             </div>
             <div id="cryoMapGrid" class="cryo-map"></div>
             <form class="form-grid vial-form is-hidden" id="cryoVialForm">
@@ -585,6 +611,10 @@
             Notes
             <textarea name="notes" rows="3" placeholder="Project notes"></textarea>
           </label>
+          <div class="wide admin-only is-hidden">
+            <div class="field-label">Project members</div>
+            <div class="checkbox-grid" id="projectMemberCheckboxes"></div>
+          </div>
           <div class="form-actions wide">
             <button class="primary-button" id="projectSubmitButton" type="submit">Save project</button>
             <button class="secondary-button is-hidden" id="cancelProjectEdit" type="button">Cancel edit</button>
@@ -806,7 +836,7 @@
           </label>
           <label class="is-hidden">
             Cultures
-            <select name="culture_id" id="eventCultureSelect" multiple required size="5"></select>
+            <select name="culture_id" id="eventCultureSelect" multiple size="5"></select>
           </label>
           <label>
             Event type
@@ -877,8 +907,8 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="supabase-js.min.js?v=20260626c"></script>
-    <script src="supabase-local.js?v=20260626c"></script>
-    <script src="app.js?v=20260626c"></script>
+    <script src="supabase-js.min.js?v=20260714a"></script>
+    <script src="supabase-local.js?v=20260714a"></script>
+    <script src="app.js?v=20260714a"></script>
   </body>
 </html>

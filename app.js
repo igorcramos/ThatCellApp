@@ -6,6 +6,13 @@ const supabaseClient = window.supabase || (typeof supabase !== "undefined" ? sup
 const db = supabaseClient?.createClient?.(SUPABASE_URL, SUPABASE_ANON_KEY) || null;
 
 const state = {
+  session: null,
+  user: null,
+  authAvailable: true,
+  profile: null,
+  profiles: [],
+  projectMembers: [],
+  cultureMembers: [],
   projects: [],
   cellLines: [],
   cultures: [],
@@ -57,6 +64,12 @@ const projectColors = {
 };
 
 const els = {
+  authPanel: document.querySelector("#authPanel"),
+  authForm: document.querySelector("#authForm"),
+  magicLinkButton: document.querySelector("#magicLinkButton"),
+  userStrip: document.querySelector("#userStrip"),
+  currentUserLabel: document.querySelector("#currentUserLabel"),
+  signOutButton: document.querySelector("#signOutButton"),
   connectionStatus: document.querySelector("#connectionStatus"),
   lastUpdated: document.querySelector("#lastUpdated"),
   cellLineForm: document.querySelector("#cellLineForm"),
@@ -96,6 +109,8 @@ const els = {
   cryoSearchResults: document.querySelector("#cryoSearchResults"),
   cryoLookupBody: document.querySelector("#cryoLookupBody"),
   toggleCryoLookup: document.querySelector("#toggleCryoLookup"),
+  downloadCryoCsv: document.querySelector("#downloadCryoCsv"),
+  downloadCryoXls: document.querySelector("#downloadCryoXls"),
   cryoBoxSubmitButton: document.querySelector("#cryoBoxSubmitButton"),
   cancelCryoBoxEdit: document.querySelector("#cancelCryoBoxEdit"),
   cryoVialSubmitButton: document.querySelector("#cryoVialSubmitButton"),
@@ -130,12 +145,16 @@ const els = {
   customInitialCellTypeLabel: document.querySelector("#customInitialCellTypeLabel"),
   createPlateFromCultureButton: document.querySelector("#createPlateFromCultureButton"),
   addPlateButton: document.querySelector("#addPlateButton"),
+  addPlateSetup: document.querySelector("#addPlateSetup"),
+  plateSetupList: document.querySelector("#plateSetupList"),
   protocolProjectSelect: document.querySelector("#protocolProjectSelect"),
   customProtocolProjectLabel: document.querySelector("#customProtocolProjectLabel"),
   runProjectSelect: document.querySelector("#runProjectSelect"),
   customRunProjectLabel: document.querySelector("#customRunProjectLabel"),
   projectForm: document.querySelector("#projectForm"),
   projectSubmitButton: document.querySelector("#projectSubmitButton"),
+  projectMemberCheckboxes: document.querySelector("#projectMemberCheckboxes"),
+  cultureMemberCheckboxes: document.querySelector("#cultureMemberCheckboxes"),
   cancelProjectEdit: document.querySelector("#cancelProjectEdit"),
   eventTypeSelect: document.querySelector("#eventTypeSelect"),
   plateMapPanel: document.querySelector("#plateMapPanel"),
@@ -196,6 +215,10 @@ function composedCellLineName(identifier, clone) {
   return [identifier, clone].filter(Boolean).join(" - ");
 }
 
+function preferredCellLineName(line) {
+  return valueOrNull(line?.full_name) || composedCellLineName(line?.identifier, line?.clone) || valueOrNull(line?.name);
+}
+
 function valueFromSelectWithCustom(data, selectName, customName) {
   const selected = valueOrNull(data.get(selectName));
   if (selected !== "__add") return selected;
@@ -251,6 +274,70 @@ function setCheckedValues(container, values) {
   });
 }
 
+function currentUserId() {
+  return state.user?.id || null;
+}
+
+function isAdmin() {
+  return state.profile?.role === "admin";
+}
+
+function profileName(profile) {
+  return profile?.full_name || profile?.email || "";
+}
+
+function memberCheckboxesHtml(selectedIds = []) {
+  const selected = new Set(selectedIds.filter(Boolean));
+  if (!state.profiles.length) {
+    return '<div class="empty-state">No users available yet.</div>';
+  }
+
+  return state.profiles
+    .map((profile) => `
+      <label class="checkbox-label">
+        <input type="checkbox" value="${profile.id}" ${selected.has(profile.id) ? "checked" : ""}>
+        ${escapeHtml(profileName(profile) || "Unnamed user")}
+      </label>
+    `)
+    .join("");
+}
+
+function projectMemberIds(projectId) {
+  if (!projectId) return currentUserId() ? [currentUserId()] : [];
+  return state.projectMembers
+    .filter((member) => member.project_id === projectId)
+    .map((member) => member.user_id);
+}
+
+function cultureMemberIds(cultureId) {
+  if (!cultureId) return currentUserId() ? [currentUserId()] : [];
+  return state.cultureMembers
+    .filter((member) => member.culture_id === cultureId)
+    .map((member) => member.user_id);
+}
+
+function memberNames(ids) {
+  const names = ids
+    .map((id) => state.profiles.find((profile) => profile.id === id))
+    .filter(Boolean)
+    .map(profileName);
+  return names.join(", ");
+}
+
+function renderMemberSelectors() {
+  const currentProjectId = valueOrNull(els.projectForm.elements.id.value);
+  const currentCultureId = valueOrNull(els.cultureForm.elements.id.value);
+  if (els.projectMemberCheckboxes) {
+    els.projectMemberCheckboxes.innerHTML = memberCheckboxesHtml(projectMemberIds(currentProjectId));
+  }
+  if (els.cultureMemberCheckboxes) {
+    els.cultureMemberCheckboxes.innerHTML = memberCheckboxesHtml(cultureMemberIds(currentCultureId));
+  }
+  document.querySelectorAll(".admin-only").forEach((element) => {
+    element.classList.toggle("is-hidden", !isAdmin());
+  });
+}
+
 function setDefaultDate(form, name) {
   const field = form.elements[name];
   if (field && !field.value) field.value = todayValue();
@@ -261,8 +348,9 @@ function uniqueValues(values) {
 }
 
 function projectValues() {
+  const starterProjects = state.session ? [] : defaultProjects;
   return uniqueValues([
-    ...defaultProjects,
+    ...starterProjects,
     ...state.projects.map((project) => project.name),
     ...state.cultures.map((culture) => culture.project),
     ...state.cryoBoxes.map((box) => box.project),
@@ -380,12 +468,12 @@ function formatEstimatedCompletion(dayZeroDate, taskDay, durationHours) {
 
 function cultureDisplayName(culture) {
   if (!culture) return "Culture";
-  const lineName = culture.cell_lines?.name || "Cell line";
+  const lineName = preferredCellLineName(culture.cell_lines) || "Cell line";
   return culture.culture_name || `${lineName}${culture.passage_number !== null ? ` P${culture.passage_number}` : ""}`;
 }
 
 function cellLineDisplayName(line) {
-  return line?.name || composedCellLineName(line?.identifier, line?.clone) || "Cell line";
+  return preferredCellLineName(line) || "Cell line";
 }
 
 function isMultiwell(vesselType) {
@@ -415,7 +503,7 @@ function cryoBoxLocation(box) {
 }
 
 function cryoVialLineage(vial) {
-  return vial?.cell_lines?.name || vial?.lineage || "Unlabeled cell line";
+  return preferredCellLineName(vial?.cell_lines) || vial?.lineage || "Unlabeled cell line";
 }
 
 function cryoVialSlotLabel(vial) {
@@ -427,7 +515,7 @@ function cryoVialSearchText(vial, box) {
   return [
     cryoVialLineage(vial),
     vial?.cell_type,
-    vial?.cell_lines?.name,
+    preferredCellLineName(vial?.cell_lines),
     box?.name,
     cryoBoxLocation(box),
     vial?.position,
@@ -446,6 +534,152 @@ function cryoPositionsForBox(box) {
   return rows.flatMap((row) =>
     Array.from({ length: columns }, (_, index) => `${row}${index + 1}`)
   );
+}
+
+function safeFileName(value) {
+  return String(value || "cryostock")
+    .trim()
+    .replace(/[^a-z0-9_-]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase() || "cryostock";
+}
+
+function downloadTextFile(filename, contents, type) {
+  const blob = new Blob([contents], { type });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(link.href), 0);
+}
+
+function csvCell(value) {
+  const text = value === null || value === undefined ? "" : String(value);
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function xlsCell(value) {
+  return escapeHtml(value === null || value === undefined ? "" : String(value));
+}
+
+function cryoExportRows(box) {
+  const vials = new Map(
+    state.cryoVials
+      .filter((vial) => vial.box_id === box.id)
+      .map((vial) => [vial.position, vial])
+  );
+  const columns = Math.max(1, Number(box.columns_count || 9));
+  return cryoPositionsForBox(box).map((position) => {
+    const vial = vials.get(position);
+    const rowLabel = position.match(/^[A-Z]+/)?.[0] || "";
+    const columnLabel = position.replace(/^[A-Z]+/, "");
+    return {
+      box: box.name,
+      project: box.project,
+      freezer: box.freezer,
+      rack: box.rack,
+      shelf: box.shelf,
+      drawer: box.drawer,
+      box_position: box.box_position,
+      position,
+      row: rowLabel,
+      column: columnLabel,
+      grid_column: Number(columnLabel) || columns,
+      lineage: vial ? cryoVialLineage(vial) : "",
+      cell_type: vial?.cell_type,
+      freeze_date: vial?.freeze_date,
+      passage_number: vial?.passage_number,
+      status: vial?.status || "empty",
+      frozen_by: vial?.frozen_by,
+      notes: vial?.notes,
+    };
+  });
+}
+
+function exportCryoCsv(box) {
+  const headers = [
+    "Box",
+    "Project",
+    "Freezer",
+    "Rack",
+    "Shelf",
+    "Drawer",
+    "Box position",
+    "Position",
+    "Row",
+    "Column",
+    "Lineage",
+    "Cell type",
+    "Freeze date",
+    "Passage",
+    "Status",
+    "Frozen by",
+    "Notes",
+  ];
+  const keys = ["box", "project", "freezer", "rack", "shelf", "drawer", "box_position", "position", "row", "column", "lineage", "cell_type", "freeze_date", "passage_number", "status", "frozen_by", "notes"];
+  const lines = [
+    headers.map(csvCell).join(","),
+    ...cryoExportRows(box).map((row) => keys.map((key) => csvCell(row[key])).join(",")),
+  ];
+  downloadTextFile(`${safeFileName(box.name)}-cryostock.csv`, lines.join("\n"), "text/csv;charset=utf-8");
+}
+
+function exportCryoXls(box) {
+  const rows = cryoExportRows(box);
+  const rowsByLabel = cryoRows(box.rows_count || 9);
+  const columns = Math.max(1, Number(box.columns_count || 9));
+  const rowMap = new Map(rows.map((row) => [row.position, row]));
+  const mapRows = rowsByLabel.map((rowLabel) => {
+    const cells = Array.from({ length: columns }, (_, index) => {
+      const position = `${rowLabel}${index + 1}`;
+      const row = rowMap.get(position);
+      const label = row?.lineage ? `${position}\n${row.lineage}${row.cell_type ? `\n${row.cell_type}` : ""}` : position;
+      return `<td>${xlsCell(label).replace(/\n/g, "<br>")}</td>`;
+    }).join("");
+    return `<tr><th>${xlsCell(rowLabel)}</th>${cells}</tr>`;
+  }).join("");
+  const detailRows = rows.map((row) => `
+    <tr>
+      <td>${xlsCell(row.position)}</td>
+      <td>${xlsCell(row.lineage)}</td>
+      <td>${xlsCell(row.cell_type)}</td>
+      <td>${xlsCell(row.freeze_date)}</td>
+      <td>${xlsCell(row.passage_number)}</td>
+      <td>${xlsCell(row.status)}</td>
+      <td>${xlsCell(row.frozen_by)}</td>
+      <td>${xlsCell(row.notes)}</td>
+    </tr>
+  `).join("");
+  const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; }
+    table { border-collapse: collapse; margin-bottom: 18px; }
+    th, td { border: 1px solid #999; padding: 6px; vertical-align: top; }
+    th { background: #e8efeb; }
+  </style>
+</head>
+<body>
+  <h1>${xlsCell(box.name)}</h1>
+  <p>${xlsCell(cryoBoxLocation(box) || "No freezer location set")}</p>
+  <table>
+    <tr><th></th>${Array.from({ length: columns }, (_, index) => `<th>${index + 1}</th>`).join("")}</tr>
+    ${mapRows}
+  </table>
+  <table>
+    <tr>
+      <th>Position</th><th>Lineage</th><th>Cell type</th><th>Freeze date</th>
+      <th>Passage</th><th>Status</th><th>Frozen by</th><th>Notes</th>
+    </tr>
+    ${detailRows}
+  </table>
+</body>
+</html>`;
+  downloadTextFile(`${safeFileName(box.name)}-cryostock.xls`, html, "application/vnd.ms-excel;charset=utf-8");
 }
 
 function cultureIdsForVessel(vesselId) {
@@ -486,24 +720,101 @@ function syncCultureNameSuggestion(force = false) {
   field.value = suggestedCultureName();
 }
 
+function plateTypeOptionsHtml(selectedValue = "") {
+  const options = ["6 well", "12 well", "24 well", "96 well", "60mm", "100mm", "150mm"];
+  return [
+    '<option value="">No plate</option>',
+    ...options.map((option) => `<option value="${option}" ${option === selectedValue ? "selected" : ""}>${option}</option>`),
+  ].join("");
+}
+
+function plateSetupRowHtml(setup = {}, index = 0) {
+  const mode = setup.mode || "whole";
+  return `
+    <div class="plate-setup-row" data-plate-setup-row>
+      <label>
+        Plate type
+        <select name="plate_setup_type">${plateTypeOptionsHtml(setup.plateType || "")}</select>
+      </label>
+      <label>
+        Quantity
+        <input name="plate_setup_count" type="number" min="0" step="1" value="${escapeHtml(setup.count ?? 1)}">
+      </label>
+      <label>
+        Map
+        <select name="plate_setup_mode">
+          <option value="whole" ${mode === "whole" ? "selected" : ""}>Same condition</option>
+          <option value="map" ${mode === "map" ? "selected" : ""}>Map wells</option>
+        </select>
+      </label>
+      <label>
+        Name prefix
+        <input name="plate_setup_name" value="${escapeHtml(setup.name || "")}" placeholder="Optional">
+      </label>
+      <button class="icon-button danger-button" data-remove-plate-setup type="button" title="Remove plate setup" aria-label="Remove plate setup">&#128465;</button>
+    </div>
+  `;
+}
+
+function renderPlateSetupRows(setups = [{ count: 1, mode: "whole" }]) {
+  els.plateSetupList.innerHTML = setups.map(plateSetupRowHtml).join("");
+}
+
+function addPlateSetupRow(setup) {
+  els.plateSetupList.insertAdjacentHTML("beforeend", plateSetupRowHtml(setup || { count: 1, mode: "whole" }));
+}
+
+function plateSetupsFromForm(form) {
+  return Array.from(form.querySelectorAll("[data-plate-setup-row]"))
+    .map((row) => ({
+      plateType: valueOrNull(row.querySelector('[name="plate_setup_type"]')?.value),
+      count: Math.max(0, numberOrNull(row.querySelector('[name="plate_setup_count"]')?.value) ?? 0),
+      mode: valueOrNull(row.querySelector('[name="plate_setup_mode"]')?.value) || "whole",
+      name: valueOrNull(row.querySelector('[name="plate_setup_name"]')?.value),
+    }))
+    .filter((setup) => setup.plateType && setup.count > 0);
+}
+
 async function createPlatesForCulture(culture, options) {
-  const plateType = valueOrNull(options.plateType);
-  const plateCount = Math.max(0, Number(options.plateCount || 0));
-  if (!plateType || plateCount === 0) return [];
+  const plateSetups = options.plateSetups?.length
+    ? options.plateSetups
+    : [{
+      plateType: valueOrNull(options.plateType),
+      count: Math.max(0, Number(options.plateCount || 0)),
+      mode: options.wholePlate ? "whole" : "map",
+    }];
+  const normalizedSetups = plateSetups
+    .map((setup) => ({
+      ...setup,
+      plateType: valueOrNull(setup.plateType),
+      count: Math.max(0, Number(setup.count || 0)),
+      mapWells: setup.mode === "map" || setup.mapWells === true,
+    }))
+    .filter((setup) => setup.plateType && setup.count > 0);
+  if (normalizedSetups.length === 0) return [];
 
   const baseName = basePlateName(culture, culture.cell_line_id);
-  const plates = Array.from({ length: plateCount }, (_, index) => ({
-    name: plateCount === 1 ? `${baseName} plate` : `${baseName} plate ${index + 1}`,
-    vessel_type: plateType,
-    culture_id: culture.id,
-    location: culture.location || null,
-    status: "active",
-    notes: options.wholePlate ? "Whole plate same condition." : "Map wells for specific conditions.",
-  }));
+  const plates = normalizedSetups.flatMap((setup, setupIndex) =>
+    Array.from({ length: setup.count }, (_, index) => {
+      const multipleSetups = normalizedSetups.length > 1;
+      const defaultName = multipleSetups ? `${baseName} ${setup.plateType}` : `${baseName} plate`;
+      const nameBase = setup.name || defaultName;
+      return {
+        name: setup.count === 1 ? nameBase : `${nameBase} ${index + 1}`,
+        vessel_type: setup.plateType,
+        culture_id: culture.id,
+        location: culture.location || null,
+        status: "active",
+        notes: setup.mapWells ? "Map wells for multiple lineages or conditions." : "Whole plate same condition.",
+        _mapWells: setup.mapWells,
+        _setupIndex: setupIndex,
+      };
+    })
+  );
 
   const { data: savedPlates, error } = await db
     .from("culture_vessels")
-    .insert(plates)
+    .insert(plates.map(({ _mapWells, _setupIndex, ...plate }) => plate))
     .select("id, vessel_type");
 
   if (error) throw error;
@@ -517,7 +828,10 @@ async function createPlatesForCulture(culture, options) {
     if (linkError) throw linkError;
   }
 
-  return savedPlates || [];
+  return (savedPlates || []).map((plate, index) => ({
+    ...plate,
+    mapWells: Boolean(plates[index]?._mapWells),
+  }));
 }
 
 async function handleCreatePlateFromCulture() {
@@ -535,15 +849,12 @@ async function handleCreatePlateFromCulture() {
     return;
   }
 
-  const plateType = valueOrNull(form.elements.vessel_type.value);
-  if (!plateType) {
-    showToast("Choose an initial plate type first.");
+  const plateSetups = plateSetupsFromForm(form);
+  if (plateSetups.length === 0) {
+    showToast("Add at least one plate setup first.");
     return;
   }
 
-  const plateCountValue = numberOrNull(form.elements.plate_count.value);
-  const plateCount = plateCountValue === null ? 1 : plateCountValue;
-  const wholePlate = form.elements.whole_plate.checked;
   try {
     const createdPlates = await createPlatesForCulture(
       {
@@ -551,12 +862,13 @@ async function handleCreatePlateFromCulture() {
         culture_name: valueOrNull(form.elements.culture_name.value) || culture.culture_name,
         location: valueOrNull(form.elements.location.value) || culture.location,
       },
-      { plateType, plateCount, wholePlate }
+      { plateSetups }
     );
     showToast(createdPlates.length ? `${createdPlates.length} plate${createdPlates.length === 1 ? "" : "s"} created.` : "No plates created.");
     await loadAll();
-    if (!wholePlate && createdPlates.length > 0 && isMultiwell(createdPlates[0].vessel_type)) {
-      state.selectedVesselId = createdPlates[0].id;
+    const firstMappedPlate = createdPlates.find((plate) => plate.mapWells && isMultiwell(plate.vessel_type));
+    if (firstMappedPlate) {
+      state.selectedVesselId = firstMappedPlate.id;
       renderVessels();
     }
   } catch (error) {
@@ -731,13 +1043,19 @@ function renderCellLines() {
 
   els.cellLinesList.innerHTML = state.cellLines
     .map((line) => {
-      const title = line.name || composedCellLineName(line.identifier, line.clone);
+      const title = cellLineDisplayName(line);
       const modifications = [
         line.has_crispr ? "CRISPR" : null,
         line.has_transgene ? "Transgene" : null,
         line.fluorescence ? `${line.fluorescence} fluorescence` : null,
       ].filter(Boolean);
-      const meta = [line.species, line.cell_type, line.source, ...modifications].filter(Boolean);
+      const meta = [
+        line.full_name ? composedCellLineName(line.identifier, line.clone) : null,
+        line.species,
+        line.cell_type,
+        line.source,
+        ...modifications,
+      ].filter(Boolean);
       return `
         <article class="item">
           <div>
@@ -1080,7 +1398,7 @@ function renderDifferentiationWellCheckboxes() {
   els.differentiationWellCheckboxes.innerHTML = wellsForVesselType(vessel.vessel_type)
     .map((wellName) => {
       const well = mappedWells.get(wellName);
-      const label = well?.condition_label || well?.cell_lines?.name || "Empty";
+      const label = well?.condition_label || preferredCellLineName(well?.cell_lines) || "Empty";
       return `
         <label class="checkbox-label">
           <input type="checkbox" value="${wellName}">
@@ -1096,7 +1414,8 @@ function renderCultureItem(culture) {
   const badgeClass = statusClass[culture.status] || "";
   const meta = [
     culture.project,
-    culture.cell_lines?.name,
+    preferredCellLineName(culture.cell_lines),
+    memberNames(cultureMemberIds(culture.id)) ? `Members: ${memberNames(cultureMemberIds(culture.id))}` : null,
     culture.initial_cell_type,
     culture.start_date ? `Started: ${formatDate(culture.start_date)}` : null,
     culture.passage_number !== null ? `P${culture.passage_number}` : null,
@@ -1152,7 +1471,7 @@ function renderPlateMap() {
   els.plateMapGrid.innerHTML = wells
     .map((wellName) => {
       const record = wellRecords.get(wellName);
-      const label = record?.condition_label || record?.cell_lines?.name || record?.cultures?.culture_name || "";
+      const label = record?.condition_label || preferredCellLineName(record?.cell_lines) || record?.cultures?.culture_name || "";
       const selected = state.selectedWells.has(wellName) ? " is-selected" : "";
       const filled = record ? " is-filled" : "";
       return `
@@ -1247,7 +1566,7 @@ function renderEvents() {
           project,
           culture ? cultureDisplayName(culture) : null,
           event.vessel_id ? vesselDisplayName(state.vessels.find((vessel) => vessel.id === event.vessel_id)) : null,
-          culture?.cell_lines?.name,
+          preferredCellLineName(culture?.cell_lines),
           event.passage_number !== null ? `P${event.passage_number}` : null,
           event.performed_by ? `By ${event.performed_by}` : null,
         ]),
@@ -1359,7 +1678,8 @@ function renderProjects() {
         `${vessels.length} plate${vessels.length === 1 ? "" : "s"}`,
         `${protocols.length} protocol${protocols.length === 1 ? "" : "s"}`,
         `${runs.length} differentiation run${runs.length === 1 ? "" : "s"}`,
-      ];
+        memberNames(projectMemberIds(savedProject?.id)) ? `Members: ${memberNames(projectMemberIds(savedProject?.id))}` : null,
+      ].filter(Boolean);
       const culturesByProject = cultures.length
         ? cultures
           .map((culture) => {
@@ -1404,8 +1724,49 @@ function renderMetrics() {
   els.eventCount.textContent = state.events.length + state.differentiationEvents.length;
 }
 
+function clearData() {
+  state.profile = null;
+  state.profiles = [];
+  state.projectMembers = [];
+  state.cultureMembers = [];
+  state.projects = [];
+  state.cellLines = [];
+  state.cultures = [];
+  state.events = [];
+  state.vessels = [];
+  state.vesselWells = [];
+  state.vesselCultures = [];
+  state.cryoBoxes = [];
+  state.cryoVials = [];
+  state.differentiationProtocols = [];
+  state.protocolTasks = [];
+  state.differentiationRuns = [];
+  state.differentiationRunWells = [];
+  state.differentiationEvents = [];
+  state.selectedVesselId = null;
+  state.selectedWells = new Set();
+  state.selectedCryoBoxId = null;
+  state.selectedCryoPositions = new Set();
+}
+
+function renderAuthState() {
+  const signedIn = Boolean(state.session);
+  const authRequired = state.authAvailable;
+  document.querySelectorAll(".app-shell").forEach((element) => {
+    element.classList.toggle("is-hidden", authRequired && !signedIn);
+  });
+  els.authPanel.classList.toggle("is-hidden", !authRequired || signedIn);
+  els.userStrip.classList.toggle("is-hidden", !authRequired || !signedIn);
+  els.currentUserLabel.textContent = signedIn
+    ? `${profileName(state.profile) || state.user?.email || "Signed in"}${isAdmin() ? " - admin" : ""}`
+    : "";
+  renderMemberSelectors();
+}
+
 function renderAll() {
+  renderAuthState();
   renderOptions();
+  renderMemberSelectors();
   renderCellLines();
   renderCultures();
   renderVessels();
@@ -1419,6 +1780,45 @@ function renderAll() {
   renderMetrics();
 }
 
+async function ensureCurrentProfile() {
+  const user = state.user;
+  if (!user) return;
+
+  const { data } = await db
+    .from("profiles")
+    .select("id")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (data?.id) return;
+
+  const fallbackName = user.user_metadata?.full_name || user.email?.split("@")[0] || "User";
+  const { error } = await db.from("profiles").insert({
+    id: user.id,
+    email: user.email,
+    full_name: fallbackName,
+    role: "member",
+  });
+  if (error && error.code !== "23505") throw error;
+}
+
+function isMissingTableError(error) {
+  return error?.code === "PGRST205" || /Could not find the table/i.test(error?.message || "");
+}
+
+async function detectAuthTables() {
+  const { error } = await db.from("profiles").select("id").limit(1);
+  state.authAvailable = !isMissingTableError(error);
+  if (error && state.authAvailable) throw error;
+  if (!state.authAvailable) {
+    state.session = null;
+    state.user = null;
+    state.profile = null;
+    state.profiles = [];
+    state.projectMembers = [];
+    state.cultureMembers = [];
+  }
+}
+
 async function loadAll() {
   setStatus("loading", "Loading");
   setLastChecked();
@@ -1429,27 +1829,70 @@ async function loadAll() {
   }
 
   try {
+  await detectAuthTables();
 
-  const [cellLinesResult, culturesResult, eventsResult] = await withTimeout(Promise.all([
+  if (state.authAvailable && !state.session) {
+    clearData();
+    setStatus("error", "Sign in");
+    setLoadIssue("Sign in to load lab data.");
+    renderAll();
+    return;
+  }
+
+  if (state.authAvailable) await ensureCurrentProfile();
+
+  const authRequests = state.authAvailable
+    ? [
+      db.from("profiles").select("*").eq("id", currentUserId()).single(),
+      db.from("profiles").select("*").order("full_name", { ascending: true }),
+      db.from("project_members").select("*"),
+      db.from("culture_members").select("*"),
+    ]
+    : [
+      Promise.resolve({ data: null, error: null }),
+      Promise.resolve({ data: [], error: null }),
+      Promise.resolve({ data: [], error: null }),
+      Promise.resolve({ data: [], error: null }),
+    ];
+
+  const [profileResult, profilesResult, projectMembersResult, cultureMembersResult, cellLinesResult, culturesResult, eventsResult] = await withTimeout(Promise.all([
+    ...authRequests,
     db.from("cell_lines").select("*").order("name", { ascending: true }),
     db
       .from("cultures")
-      .select("*, cell_lines(name)")
+      .select("*, cell_lines(name, full_name, identifier, clone)")
       .order("created_at", { ascending: false }),
     db
       .from("culture_events")
-      .select("*, cultures(culture_name, passage_number, cell_lines(name))")
+      .select("*, cultures(culture_name, passage_number, cell_lines(name, full_name, identifier, clone))")
       .order("event_date", { ascending: false })
       .order("created_at", { ascending: false }),
   ]), 15000, "Database request timed out.");
 
-  const baseError = cellLinesResult.error || culturesResult.error || eventsResult.error;
+  const authTablesMissing =
+    isMissingTableError(profileResult.error) ||
+    isMissingTableError(profilesResult.error) ||
+    isMissingTableError(projectMembersResult.error) ||
+    isMissingTableError(cultureMembersResult.error);
+  if (authTablesMissing) {
+    state.authAvailable = false;
+  }
+
+  const authError = state.authAvailable
+    ? profileResult.error || profilesResult.error || projectMembersResult.error || cultureMembersResult.error
+    : null;
+  const baseError = authError || cellLinesResult.error || culturesResult.error || eventsResult.error;
   if (baseError) {
     setStatus("error", "Error");
     setLoadIssue(baseError.message);
     showToast(`Error loading data: ${baseError.message}`);
     return;
   }
+
+  state.profile = profileResult.data || null;
+  state.profiles = profilesResult.data || [];
+  state.projectMembers = projectMembersResult.data || [];
+  state.cultureMembers = cultureMembersResult.data || [];
 
   const [projectsResult, vesselsResult, wellsResult, vesselCulturesResult, cryoBoxesResult, cryoVialsResult, protocolsResult, protocolTasksResult, differentiationRunsResult, differentiationRunWellsResult, differentiationEventsResult] = await withTimeout(Promise.all([
     db
@@ -1462,11 +1905,11 @@ async function loadAll() {
       .order("created_at", { ascending: false }),
     db
       .from("vessel_wells")
-      .select("*, cell_lines(name, identifier, clone), cultures(culture_name, passage_number, cell_lines(name))")
+      .select("*, cell_lines(name, full_name, identifier, clone), cultures(culture_name, passage_number, cell_lines(name, full_name, identifier, clone))")
       .order("well", { ascending: true }),
     db
       .from("vessel_cultures")
-      .select("*, cultures(culture_name, passage_number, cell_lines(name))"),
+      .select("*, cultures(culture_name, passage_number, cell_lines(name, full_name, identifier, clone))"),
     db
       .from("cryo_boxes")
       .select("*")
@@ -1474,7 +1917,7 @@ async function loadAll() {
       .order("name", { ascending: true }),
     db
       .from("cryo_vials")
-      .select("*, cell_lines(name, identifier, clone)")
+      .select("*, cell_lines(name, full_name, identifier, clone)")
       .order("position", { ascending: true }),
     db
       .from("differentiation_protocols")
@@ -1657,6 +2100,21 @@ async function deleteRecord(table, id, label) {
   await loadAll();
 }
 
+async function syncMembership(table, keyColumn, ownerId, userIds) {
+  if (!isAdmin() || !ownerId) return null;
+  const selected = uniqueValues([currentUserId(), ...(userIds || [])]);
+  const { error: deleteError } = await db.from(table).delete().eq(keyColumn, ownerId);
+  if (deleteError) return deleteError;
+  if (selected.length === 0) return null;
+
+  const rows = selected.map((userId) => ({
+    [keyColumn]: ownerId,
+    user_id: userId,
+  }));
+  const { error } = await db.from(table).insert(rows);
+  return error || null;
+}
+
 async function handleProjectSubmit(event) {
   event.preventDefault();
   if (!ensureDb()) return;
@@ -1681,13 +2139,25 @@ async function handleProjectSubmit(event) {
   };
 
   const query = editingId
-    ? db.from("projects").update(payload).eq("id", editingId)
-    : db.from("projects").insert(payload);
-  const { error } = await query;
+    ? db.from("projects").update(payload).eq("id", editingId).select("id").single()
+    : db.from("projects").insert(payload).select("id").single();
+  const { data: savedProject, error } = await query;
 
   if (error) {
     submit.disabled = false;
     showToast(`Error saving project: ${error.message}`);
+    return;
+  }
+
+  const membershipError = await syncMembership(
+    "project_members",
+    "project_id",
+    savedProject?.id || editingId,
+    getCheckedValues(els.projectMemberCheckboxes)
+  );
+  if (membershipError) {
+    submit.disabled = false;
+    showToast(`Project saved, but members failed: ${membershipError.message}`);
     return;
   }
 
@@ -1753,13 +2223,15 @@ async function handleCellLineSubmit(event) {
 
   submit.disabled = true;
   const identifier = valueOrNull(data.get("identifier"));
+  const fullName = valueOrNull(data.get("full_name"));
   const clone = valueOrNull(data.get("clone"));
   const hasCrispr = data.get("has_crispr") === "on";
   const hasTransgene = data.get("has_transgene") === "on";
   const payload = {
     identifier,
+    full_name: fullName,
     clone,
-    name: composedCellLineName(identifier, clone),
+    name: fullName || composedCellLineName(identifier, clone),
     species: valueFromSelectWithCustom(data, "species", "custom_species"),
     cell_type: valueFromSelectWithCustom(data, "cell_type", "custom_cell_type"),
     source: valueOrNull(data.get("source")),
@@ -1802,6 +2274,7 @@ async function handleCultureSubmit(event) {
   const data = new FormData(form);
 
   submit.disabled = true;
+  const plateSetups = plateSetupsFromForm(form);
   const payload = {
     cell_line_id: data.get("cell_line_id"),
     culture_name: valueOrNull(data.get("culture_name")),
@@ -1809,7 +2282,7 @@ async function handleCultureSubmit(event) {
     start_date: valueOrNull(data.get("start_date")),
     passage_number: numberOrNull(data.get("passage_number")),
     initial_cell_type: valueFromSelectWithCustom(data, "initial_cell_type", "custom_initial_cell_type"),
-    vessel_type: valueOrNull(data.get("vessel_type")),
+    vessel_type: plateSetups[0]?.plateType || null,
     medium: valueOrNull(data.get("medium")),
     status: valueOrNull(data.get("status")) || "active",
     location: valueOrNull(data.get("location")),
@@ -1817,12 +2290,9 @@ async function handleCultureSubmit(event) {
   };
 
   const editingId = valueOrNull(data.get("id"));
-  const plateCountValue = numberOrNull(data.get("plate_count"));
-  const plateCount = payload.vessel_type ? (plateCountValue === null ? 1 : plateCountValue) : 0;
-  const wholePlate = data.get("whole_plate") === "on";
   const query = editingId
-    ? db.from("cultures").update(payload).eq("id", editingId).select("*, cell_lines(name)").single()
-    : db.from("cultures").insert(payload).select("*, cell_lines(name)").single();
+    ? db.from("cultures").update(payload).eq("id", editingId).select("*, cell_lines(name, full_name, identifier, clone)").single()
+    : db.from("cultures").insert(payload).select("*, cell_lines(name, full_name, identifier, clone)").single();
   const { data: savedCulture, error } = await query;
   submit.disabled = false;
 
@@ -1831,13 +2301,23 @@ async function handleCultureSubmit(event) {
     return;
   }
 
+  const membershipError = await syncMembership(
+    "culture_members",
+    "culture_id",
+    savedCulture?.id || editingId,
+    getCheckedValues(els.cultureMemberCheckboxes)
+  );
+  if (membershipError) {
+    submit.disabled = false;
+    showToast(`Culture saved, but members failed: ${membershipError.message}`);
+    return;
+  }
+
   let createdPlates = [];
   if (!editingId && savedCulture) {
     try {
       createdPlates = await createPlatesForCulture(savedCulture, {
-        plateType: payload.vessel_type,
-        plateCount,
-        wholePlate,
+        plateSetups,
       });
     } catch (plateError) {
       showToast(`Culture saved, but plates failed: ${plateError.message}`);
@@ -1845,13 +2325,12 @@ async function handleCultureSubmit(event) {
   }
 
   resetCultureForm();
-  if (!wholePlate && createdPlates.length > 0 && isMultiwell(createdPlates[0].vessel_type)) {
-    state.selectedVesselId = createdPlates[0].id;
-  }
+  const firstMappedPlate = createdPlates.find((plate) => plate.mapWells && isMultiwell(plate.vessel_type));
+  if (firstMappedPlate) state.selectedVesselId = firstMappedPlate.id;
   showToast(editingId ? "Culture updated." : createdPlates.length ? `Culture started with ${createdPlates.length} plate${createdPlates.length === 1 ? "" : "s"}.` : "Culture started.");
   await loadAll();
-  if (!wholePlate && createdPlates.length > 0 && isMultiwell(createdPlates[0].vessel_type)) {
-    state.selectedVesselId = createdPlates[0].id;
+  if (firstMappedPlate) {
+    state.selectedVesselId = firstMappedPlate.id;
     renderVessels();
     els.plateMapPanel.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -2095,6 +2574,21 @@ async function handleCryoVialSubmit(event) {
   renderCryoMap();
 }
 
+function handleCryoExport(format) {
+  const box = state.cryoBoxes.find((item) => item.id === state.selectedCryoBoxId);
+  if (!box) {
+    showToast("Open a cryobox map before exporting.");
+    return;
+  }
+  if (format === "csv") {
+    exportCryoCsv(box);
+    showToast("Cryostock CSV downloaded.");
+    return;
+  }
+  exportCryoXls(box);
+  showToast("Cryostock XLS downloaded.");
+}
+
 async function handleDeleteSelectedVials() {
   if (!ensureDb()) return;
   const boxId = valueOrNull(els.cryoVialForm.elements.box_id.value);
@@ -2296,7 +2790,7 @@ async function handleEventSubmit(event) {
       vessel_id: vesselId,
       passage_number: valueOrNull(data.get("event_type")) === "Passage" ? numberOrNull(data.get("passage_number")) : null,
       confluence: null,
-      performed_by: valueFromSelectWithCustom(data, "performed_by", "custom_performed_by"),
+      performed_by: valueFromSelectWithCustom(data, "performed_by", "custom_performed_by") || profileName(state.profile),
       notes: valueOrNull(data.get("notes")),
       photo_url: photoUrl,
     };
@@ -2339,7 +2833,113 @@ function setActiveView(viewId) {
   });
 }
 
+async function handleAuthSubmit(event) {
+  event.preventDefault();
+  if (!ensureDb()) return;
+
+  const submitter = event.submitter;
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const email = valueOrNull(data.get("email"));
+  const password = valueOrNull(data.get("password"));
+  const mode = submitter?.value || "signin";
+  if (!email || !password) return;
+
+  submitter.disabled = true;
+  const request = mode === "signup"
+    ? db.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: email.split("@")[0] } },
+    })
+    : db.auth.signInWithPassword({ email, password });
+  const { data: authData, error } = await request;
+  submitter.disabled = false;
+
+  if (error) {
+    showToast(`Auth error: ${error.message}`);
+    return;
+  }
+
+  if (mode === "signup" && !authData.session) {
+    showToast("Account created. Check your email to confirm it before signing in.");
+    return;
+  }
+
+  form.reset();
+  showToast(mode === "signup" ? "Account created." : "Signed in.");
+}
+
+function authRedirectUrl() {
+  if (window.location.protocol === "file:") return null;
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+async function handleMagicLink() {
+  if (!ensureDb()) return;
+  const email = valueOrNull(els.authForm.elements.email.value);
+  if (!email) {
+    showToast("Enter your email first.");
+    return;
+  }
+
+  const emailRedirectTo = authRedirectUrl();
+  if (!emailRedirectTo) {
+    showToast("Open the app with http://localhost:5173 before using email login links.");
+    return;
+  }
+
+  els.magicLinkButton.disabled = true;
+  const { error } = await db.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo,
+      data: { full_name: email.split("@")[0] },
+    },
+  });
+  els.magicLinkButton.disabled = false;
+
+  if (error) {
+    showToast(`Login link error: ${error.message}`);
+    return;
+  }
+  showToast("Login link sent. Check your email.");
+}
+
+async function handleSignOut() {
+  if (!ensureDb()) return;
+  await db.auth.signOut();
+  clearData();
+  renderAll();
+}
+
+async function initAuth() {
+  if (!ensureDb()) {
+    renderAll();
+    return;
+  }
+
+  const { data, error } = await db.auth.getSession();
+  if (error) {
+    showToast(`Auth error: ${error.message}`);
+  }
+  state.session = data?.session || null;
+  state.user = state.session?.user || null;
+
+  db.auth.onAuthStateChange((_event, session) => {
+    state.session = session || null;
+    state.user = session?.user || null;
+    if (!session) clearData();
+    loadAll();
+  });
+
+  await loadAll();
+}
+
 function setupForms() {
+  els.authForm.addEventListener("submit", handleAuthSubmit);
+  els.magicLinkButton.addEventListener("click", handleMagicLink);
+  els.signOutButton.addEventListener("click", handleSignOut);
   els.projectForm.addEventListener("submit", handleProjectSubmit);
   els.cellLineForm.addEventListener("submit", handleCellLineSubmit);
   els.cultureForm.addEventListener("submit", handleCultureSubmit);
@@ -2357,8 +2957,17 @@ function setupForms() {
   els.projectViewFilter.addEventListener("change", renderProjects);
   els.cryoSearchInput.addEventListener("input", renderCryoSearchResults);
   els.toggleCryoLookup.addEventListener("click", toggleCryoLookup);
+  els.downloadCryoCsv.addEventListener("click", () => handleCryoExport("csv"));
+  els.downloadCryoXls.addEventListener("click", () => handleCryoExport("xls"));
   els.refreshToday.addEventListener("click", loadAll);
   els.addPlateButton.addEventListener("click", openPlateForm);
+  els.addPlateSetup.addEventListener("click", () => addPlateSetupRow());
+  els.plateSetupList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-remove-plate-setup]");
+    if (!button) return;
+    button.closest("[data-plate-setup-row]")?.remove();
+    if (!els.plateSetupList.querySelector("[data-plate-setup-row]")) addPlateSetupRow();
+  });
   els.createPlateFromCultureButton.addEventListener("click", handleCreatePlateFromCulture);
   els.cultureForm.elements.culture_name.addEventListener("input", () => {
     state.cultureNameEdited = true;
@@ -2742,6 +3351,8 @@ function fillProjectForm(projectName) {
   const color = projectColor(projectName);
   setFieldValue(form, "color", color.startsWith("#") ? color : "#176f64");
   setFieldValue(form, "notes", project?.notes);
+  renderMemberSelectors();
+  setCheckedValues(els.projectMemberCheckboxes, projectMemberIds(project?.id));
   els.projectSubmitButton.textContent = "Update project";
   els.cancelProjectEdit.classList.remove("is-hidden");
   form.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2752,6 +3363,7 @@ function resetProjectForm() {
   els.projectForm.elements.id.value = "";
   els.projectForm.elements.original_name.value = "";
   els.projectForm.elements.color.value = "#176f64";
+  renderMemberSelectors();
   els.projectSubmitButton.textContent = "Save project";
   els.cancelProjectEdit.classList.add("is-hidden");
 }
@@ -2760,6 +3372,7 @@ function fillCellLineForm(line) {
   const form = els.cellLineForm;
   setFieldValue(form, "id", line.id);
   setFieldValue(form, "identifier", line.identifier || line.name);
+  setFieldValue(form, "full_name", line.full_name);
   setFieldValue(form, "clone", line.clone);
   setSelectOrCustom(els.speciesSelect, form.elements.custom_species, line.species);
   setSelectOrCustom(els.cellTypeSelect, form.elements.custom_cell_type, line.cell_type);
@@ -2900,6 +3513,7 @@ function resetEventForm() {
   setFieldValue(els.eventForm, "activity_target_type", "cultures");
   setFieldValue(els.eventForm, "vessel_id", "");
   setDefaultDate(els.eventForm, "event_date");
+  setSelectOrCustom(els.performedBySelect, els.eventForm.elements.custom_performed_by, profileName(state.profile));
   els.eventSubmitButton.textContent = "Record event";
   els.cancelEventEdit.classList.add("is-hidden");
   syncActivityTargetFields();
@@ -2916,13 +3530,13 @@ function fillCultureForm(culture) {
   setFieldValue(form, "start_date", culture.start_date);
   setFieldValue(form, "passage_number", culture.passage_number);
   setSelectOrCustom(els.initialCellTypeSelect, form.elements.custom_initial_cell_type, culture.initial_cell_type);
-  setFieldValue(form, "vessel_type", culture.vessel_type);
-  setFieldValue(form, "plate_count", "");
-  setFieldValue(form, "whole_plate", true);
+  renderPlateSetupRows([{ plateType: culture.vessel_type, count: 1, mode: "whole" }]);
   setFieldValue(form, "medium", culture.medium);
   setFieldValue(form, "status", culture.status || "active");
   setFieldValue(form, "location", culture.location);
   setFieldValue(form, "notes", culture.notes);
+  renderMemberSelectors();
+  setCheckedValues(els.cultureMemberCheckboxes, cultureMemberIds(culture.id));
   state.cultureNameEdited = true;
   els.cultureSubmitButton.textContent = "Update culture";
   els.createPlateFromCultureButton.classList.remove("is-hidden");
@@ -2935,7 +3549,8 @@ function resetCultureForm() {
   els.cultureForm.reset();
   els.cultureForm.elements.id.value = "";
   setDefaultDate(els.cultureForm, "start_date");
-  setFieldValue(els.cultureForm, "whole_plate", true);
+  renderPlateSetupRows([{ count: 1, mode: "whole" }]);
+  renderMemberSelectors();
   state.cultureNameEdited = false;
   syncCultureNameSuggestion(true);
   els.cultureSubmitButton.textContent = "Start culture";
@@ -3031,7 +3646,8 @@ setDefaultDate(els.cultureForm, "start_date");
 setDefaultDate(els.differentiationRunForm, "day_zero_date");
 setDefaultDate(els.eventForm, "event_date");
 setDefaultDate(els.cryoVialForm, "freeze_date");
+renderPlateSetupRows();
 syncActivityTargetFields();
 syncActivityEventFields();
 renderAll();
-loadAll();
+initAuth();

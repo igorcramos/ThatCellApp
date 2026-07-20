@@ -7,13 +7,30 @@ Simple web app for cell culture tracking using Supabase.
 1. Create a Supabase project.
 2. Open the SQL Editor.
 3. Run `supabase/schema.sql`.
-4. Confirm that these tables were created:
+4. Run `supabase/2026-06-29_auth_collaboration.sql` to enable login, roles, and collaborator access.
+5. Confirm that these tables were created:
    - `cell_lines`
    - `cultures`
    - `culture_events`
    - `cryo_boxes`
    - `cryo_vials`
-5. Confirm that the `culture-photos` bucket exists in Storage.
+   - `profiles`
+   - `project_members`
+   - `culture_members`
+6. Confirm that the `culture-photos` bucket exists in Storage.
+7. Create your account in the app, then make yourself admin in the SQL Editor:
+
+```sql
+update public.profiles
+set role = 'admin'
+where email = 'your-email@example.com';
+```
+
+8. In Supabase Auth settings, choose whether sign-ups should stay open or whether you prefer inviting/creating users yourself.
+
+## Login options
+
+The app supports email/password accounts created in Supabase Auth. If you do not already have a user there, use **Create account** in the app or create/invite a user from the Supabase Dashboard.
 
 ## How to open locally
 
@@ -42,7 +59,7 @@ http://localhost:5173
 
 ## Security note
 
-This version is in prototype mode, with no login. The Supabase policies in `supabase/schema.sql` allow public read/write access to make early testing easier.
+The initial schema was prototype mode. For shared use, run `supabase/2026-06-29_auth_collaboration.sql`; it removes public read/write policies, requires login, and lets admins assign multiple users to each project or culture.
 
 ## Changing table columns
 
