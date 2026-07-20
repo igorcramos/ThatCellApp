@@ -66,7 +66,9 @@ const projectColors = {
 const els = {
   authPanel: document.querySelector("#authPanel"),
   authForm: document.querySelector("#authForm"),
+  authFileWarning: document.querySelector("#authFileWarning"),
   magicLinkButton: document.querySelector("#magicLinkButton"),
+  resetPasswordButton: document.querySelector("#resetPasswordButton"),
   userStrip: document.querySelector("#userStrip"),
   currentUserLabel: document.querySelector("#currentUserLabel"),
   signOutButton: document.querySelector("#signOutButton"),
@@ -111,6 +113,7 @@ const els = {
   toggleCryoLookup: document.querySelector("#toggleCryoLookup"),
   downloadCryoCsv: document.querySelector("#downloadCryoCsv"),
   downloadCryoXls: document.querySelector("#downloadCryoXls"),
+  downloadCryoPdf: document.querySelector("#downloadCryoPdf"),
   cryoBoxSubmitButton: document.querySelector("#cryoBoxSubmitButton"),
   cancelCryoBoxEdit: document.querySelector("#cancelCryoBoxEdit"),
   cryoVialSubmitButton: document.querySelector("#cryoVialSubmitButton"),
@@ -680,6 +683,162 @@ function exportCryoXls(box) {
 </body>
 </html>`;
   downloadTextFile(`${safeFileName(box.name)}-cryostock.xls`, html, "application/vnd.ms-excel;charset=utf-8");
+}
+
+function pdfSafeText(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7e]/g, "?")
+    .replace(/([\\()])/g, "\\$1");
+}
+
+function pdfText(x, y, size, value) {
+  return `BT /F1 ${size} Tf ${x.toFixed(1)} ${y.toFixed(1)} Td (${pdfSafeText(value)}) Tj ET`;
+}
+
+function pdfWrappedLines(value, maxCharacters, maxLines = 2) {
+  const words = String(value ?? "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  const lines = [];
+  let current = "";
+  words.forEach((word) => {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length <= maxCharacters) {
+      current = candidate;
+    } else {
+      if (current) lines.push(current);
+      current = word.slice(0, maxCharacters);
+    }
+  });
+  if (current) lines.push(current);
+  if (lines.length > maxLines) {
+    lines.length = maxLines;
+    lines[maxLines - 1] = `${lines[maxLines - 1].slice(0, Math.max(1, maxCharacters - 3))}...`;
+  }
+  return lines;
+}
+
+function buildCryoPdf(box) {
+  const rows = cryoExportRows(box);
+  const rowLabels = cryoRows(box.rows_count || 9);
+  const columnCount = Math.max(1, Number(box.columns_count || 9));
+  const byPosition = new Map(rows.map((row) => [row.position, row]));
+  const pages = [];
+  const pageWidth = 842;
+  const pageHeight = 595;
+
+  const map = [
+    pdfText(36, 558, 18, box.name),
+    pdfText(36, 540, 9, cryoBoxLocation(box) || "No freezer location set"),
+  ];
+  const left = 52;
+  const top = 510;
+  const gridWidth = 754;
+  const gridHeight = Math.min(390, 36 * rowLabels.length);
+  const cellWidth = gridWidth / columnCount;
+  const cellHeight = gridHeight / rowLabels.length;
+  map.push("0.55 w 0.72 0.78 0.80 RG");
+  rowLabels.forEach((rowLabel, rowIndex) => {
+    map.push(pdfText(36, top - rowIndex * cellHeight - cellHeight / 2 - 3, 8, rowLabel));
+    Array.from({ length: columnCount }, (_, columnIndex) => {
+      const position = `${rowLabel}${columnIndex + 1}`;
+      const row = byPosition.get(position);
+      const x = left + columnIndex * cellWidth;
+      const y = top - (rowIndex + 1) * cellHeight;
+      map.push(`${x.toFixed(1)} ${y.toFixed(1)} ${cellWidth.toFixed(1)} ${cellHeight.toFixed(1)} re S`);
+      map.push(pdfText(x + 3, y + cellHeight - 11, 7, position));
+      if (row?.lineage) {
+        const maxChars = Math.max(5, Math.floor(cellWidth / 4.3));
+        map.push(pdfText(x + 3, y + cellHeight / 2 - 2, 6, row.lineage.slice(0, maxChars)));
+        if (row.cell_type) map.push(pdfText(x + 3, y + 5, 5, String(row.cell_type).slice(0, maxChars)));
+      }
+    });
+  });
+  Array.from({ length: columnCount }, (_, index) => {
+    map.push(pdfText(left + index * cellWidth + cellWidth / 2 - 2, top + 8, 8, index + 1));
+  });
+  map.push(pdfText(36, 74, 8, `Project: ${box.project || "Not specified"}`));
+  map.push(pdfText(36, 58, 8, `Generated: ${new Date().toLocaleString()}`));
+  pages.push(map.join("\n"));
+
+  const occupied = rows.filter((row) => row.lineage);
+  const tableColumns = [
+    { label: "Position", key: "position", width: 48 },
+    { label: "Cell line", key: "lineage", width: 142 },
+    { label: "Cell type", key: "cell_type", width: 92 },
+    { label: "Freeze date", key: "freeze_date", width: 72 },
+    { label: "Passage", key: "passage_number", width: 48 },
+    { label: "Status", key: "status", width: 62 },
+    { label: "Frozen by", key: "frozen_by", width: 88 },
+    { label: "Notes", key: "notes", width: 218 },
+  ];
+  const tableLeft = 36;
+  const tableTop = 520;
+  const headerHeight = 25;
+  const rowHeight = 36;
+  for (let start = 0; start < occupied.length; start += 12) {
+    const detail = [pdfText(36, 558, 16, `${box.name} - vial details`), "0.35 w 0.65 0.70 0.68 RG"];
+    let x = tableLeft;
+    tableColumns.forEach((column) => {
+      detail.push("0.91 0.94 0.92 rg");
+      detail.push(`${x} ${tableTop} ${column.width} ${headerHeight} re B`);
+      detail.push("0 0 0 rg");
+      detail.push(pdfText(x + 4, tableTop + 9, 7, column.label));
+      x += column.width;
+    });
+    occupied.slice(start, start + 12).forEach((row, rowIndex) => {
+      const y = tableTop - (rowIndex + 1) * rowHeight;
+      let cellX = tableLeft;
+      tableColumns.forEach((column) => {
+        detail.push(`${cellX} ${y} ${column.width} ${rowHeight} re S`);
+        const maxCharacters = Math.max(4, Math.floor((column.width - 8) / 3.8));
+        pdfWrappedLines(row[column.key], maxCharacters).forEach((line, lineIndex) => {
+          detail.push(pdfText(cellX + 4, y + rowHeight - 12 - lineIndex * 10, 6.5, line));
+        });
+        cellX += column.width;
+      });
+    });
+    detail.push(pdfText(752, 35, 7, `Page ${pages.length + 1}`));
+    pages.push(detail.join("\n"));
+  }
+
+  const objects = [];
+  objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+  objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
+  const pageRefs = pages.map((_, index) => 4 + index * 2);
+  objects[2] = `<< /Type /Pages /Kids [${pageRefs.map((ref) => `${ref} 0 R`).join(" ")}] /Count ${pages.length} >>`;
+  pages.forEach((content, index) => {
+    const pageRef = 4 + index * 2;
+    const contentRef = pageRef + 1;
+    objects[pageRef] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentRef} 0 R >>`;
+    objects[contentRef] = `<< /Length ${content.length} >>\nstream\n${content}\nendstream`;
+  });
+
+  const encoder = new TextEncoder();
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  for (let index = 1; index < objects.length; index += 1) {
+    offsets[index] = encoder.encode(pdf).length;
+    pdf += `${index} 0 obj\n${objects[index]}\nendobj\n`;
+  }
+  const xrefOffset = encoder.encode(pdf).length;
+  pdf += `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+  for (let index = 1; index < objects.length; index += 1) {
+    pdf += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return encoder.encode(pdf);
+}
+
+function exportCryoPdf(box) {
+  const blob = new Blob([buildCryoPdf(box)], { type: "application/pdf" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `${safeFileName(box.name)}-cryostock.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(link.href), 0);
 }
 
 function cultureIdsForVessel(vesselId) {
@@ -2585,8 +2744,13 @@ function handleCryoExport(format) {
     showToast("Cryostock CSV downloaded.");
     return;
   }
-  exportCryoXls(box);
-  showToast("Cryostock XLS downloaded.");
+  if (format === "xls") {
+    exportCryoXls(box);
+    showToast("Cryostock XLS downloaded.");
+    return;
+  }
+  exportCryoPdf(box);
+  showToast("Cryostock PDF downloaded.");
 }
 
 async function handleDeleteSelectedVials() {
@@ -2862,7 +3026,10 @@ async function handleAuthSubmit(event) {
   }
 
   if (mode === "signup" && !authData.session) {
-    showToast("Account created. Check your email to confirm it before signing in.");
+    const accountAlreadyExists = authData.user?.identities?.length === 0;
+    showToast(accountAlreadyExists
+      ? "This email already has an account. Use Set or reset password instead."
+      : "Account created. Check your email to confirm it before signing in.");
     return;
   }
 
@@ -2906,6 +3073,43 @@ async function handleMagicLink() {
   showToast("Login link sent. Check your email.");
 }
 
+async function handleResetPassword() {
+  if (!ensureDb()) return;
+  const email = valueOrNull(els.authForm.elements.email.value);
+  if (!email) {
+    showToast("Enter your email first.");
+    return;
+  }
+  const redirectTo = authRedirectUrl();
+  if (!redirectTo) {
+    showToast("Open the app with http://localhost:5173 before resetting your password.");
+    return;
+  }
+  els.resetPasswordButton.disabled = true;
+  const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo });
+  els.resetPasswordButton.disabled = false;
+  showToast(error ? `Password reset error: ${error.message}` : "Password setup link sent. Check your email.");
+}
+
+async function finishPasswordRecovery() {
+  const password = window.prompt("Choose a new password (at least 6 characters):");
+  if (!password) {
+    showToast("Password setup canceled. You are signed in and can try again later.");
+    return;
+  }
+  if (password.length < 6) {
+    showToast("The password must contain at least 6 characters. Open the email link again to retry.");
+    return;
+  }
+  const confirmation = window.prompt("Type the new password again:");
+  if (password !== confirmation) {
+    showToast("Passwords did not match. Open the email link again to retry.");
+    return;
+  }
+  const { error } = await db.auth.updateUser({ password });
+  showToast(error ? `Password update error: ${error.message}` : "Password saved. You can now use email and password.");
+}
+
 async function handleSignOut() {
   if (!ensureDb()) return;
   await db.auth.signOut();
@@ -2914,6 +3118,7 @@ async function handleSignOut() {
 }
 
 async function initAuth() {
+  els.authFileWarning?.classList.toggle("is-hidden", window.location.protocol !== "file:");
   if (!ensureDb()) {
     renderAll();
     return;
@@ -2926,11 +3131,12 @@ async function initAuth() {
   state.session = data?.session || null;
   state.user = state.session?.user || null;
 
-  db.auth.onAuthStateChange((_event, session) => {
+  db.auth.onAuthStateChange((event, session) => {
     state.session = session || null;
     state.user = session?.user || null;
     if (!session) clearData();
     loadAll();
+    if (event === "PASSWORD_RECOVERY") window.setTimeout(finishPasswordRecovery, 0);
   });
 
   await loadAll();
@@ -2939,6 +3145,7 @@ async function initAuth() {
 function setupForms() {
   els.authForm.addEventListener("submit", handleAuthSubmit);
   els.magicLinkButton.addEventListener("click", handleMagicLink);
+  els.resetPasswordButton.addEventListener("click", handleResetPassword);
   els.signOutButton.addEventListener("click", handleSignOut);
   els.projectForm.addEventListener("submit", handleProjectSubmit);
   els.cellLineForm.addEventListener("submit", handleCellLineSubmit);
@@ -2959,6 +3166,7 @@ function setupForms() {
   els.toggleCryoLookup.addEventListener("click", toggleCryoLookup);
   els.downloadCryoCsv.addEventListener("click", () => handleCryoExport("csv"));
   els.downloadCryoXls.addEventListener("click", () => handleCryoExport("xls"));
+  els.downloadCryoPdf.addEventListener("click", () => handleCryoExport("pdf"));
   els.refreshToday.addEventListener("click", loadAll);
   els.addPlateButton.addEventListener("click", openPlateForm);
   els.addPlateSetup.addEventListener("click", () => addPlateSetupRow());

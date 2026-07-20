@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ThatCellApp</title>
-    <link rel="stylesheet" href="styles.css?v=20260714a">
+    <link rel="stylesheet" href="styles.css?v=20260720b">
   </head>
   <body>
     <header class="app-header">
@@ -30,6 +30,8 @@
         <div>
           <h2>Sign in</h2>
           <p>Use your lab account to access assigned projects and cultures.</p>
+          <p class="auth-guidance"><strong>No password yet?</strong> If you already entered with an email link, use “Set or reset password”. Use “Create account” only for a brand-new email.</p>
+          <p class="auth-file-warning is-hidden" id="authFileWarning">Login links do not work when this page is opened as a file. <a href="http://localhost:5173">Open the correct local address</a>.</p>
         </div>
         <label>
           Email
@@ -41,8 +43,9 @@
         </label>
         <div class="form-actions">
           <button class="primary-button" name="mode" value="signin" type="submit">Sign in</button>
-          <button class="secondary-button" name="mode" value="signup" type="submit">Create account</button>
-          <button class="secondary-button" id="magicLinkButton" type="button">Send login link</button>
+          <button class="secondary-button" name="mode" value="signup" type="submit">Create account with this password</button>
+          <button class="secondary-button" id="magicLinkButton" type="button">Email me a login link (no password)</button>
+          <button class="secondary-button" id="resetPasswordButton" type="button">Set or reset password</button>
         </div>
       </form>
     </section>
@@ -510,8 +513,10 @@
                 <p id="cryoMapSubtitle" class="panel-subtitle"></p>
               </div>
               <div class="export-actions">
+                <span class="export-label">Export layout:</span>
                 <button class="secondary-button compact-button" id="downloadCryoCsv" type="button">CSV</button>
                 <button class="secondary-button compact-button" id="downloadCryoXls" type="button">XLS</button>
+                <button class="secondary-button compact-button" id="downloadCryoPdf" type="button">PDF</button>
               </div>
             </div>
             <div id="cryoMapGrid" class="cryo-map"></div>
@@ -909,6 +914,6 @@
 
     <script src="supabase-js.min.js?v=20260714a"></script>
     <script src="supabase-local.js?v=20260714a"></script>
-    <script src="app.js?v=20260714a"></script>
+    <script src="app.js?v=20260720c"></script>
   </body>
 </html>

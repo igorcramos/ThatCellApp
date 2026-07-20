@@ -195,6 +195,23 @@ main {
   color: var(--muted);
 }
 
+.auth-card .auth-guidance {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #eef5f1;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.auth-card .auth-file-warning {
+  padding: 10px 12px;
+  border: 1px solid #e0b56b;
+  border-radius: 6px;
+  background: #fff6e5;
+  color: #704b12;
+  line-height: 1.45;
+}
+
 .view {
   display: none;
 }
@@ -366,6 +383,13 @@ label {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+  align-items: center;
+}
+
+.export-label {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .is-hidden {

@@ -46,6 +46,16 @@ Then open:
 http://localhost:5173
 ```
 
+## Published app
+
+The `main` branch is deployed automatically with GitHub Pages:
+
+```text
+https://igorcramos.github.io/ThatCellApp/
+```
+
+Supabase Auth must allow this exact production URL for email confirmations, magic links, and password recovery. Keep `http://localhost:5173/**` as an additional redirect URL for local development.
+
 ## What this first version does
 
 - Saves available cell lines.
