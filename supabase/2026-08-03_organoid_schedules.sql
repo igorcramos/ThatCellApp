@@ -26,7 +26,7 @@ begin
       (name, target_cell_type, version, expected_duration_days, notes)
     values
       ('Trujillo_Agg', 'Cortical organoids', '2026-08-03', 90,
-       'Aggregation protocol. Automatic medium changes are scheduled Monday, Wednesday, and Friday, never more than three days apart.')
+       'Aggregation protocol. Medium changes favor Monday, Wednesday, and Friday through D31; from D32 onward, maintenance changes occur only Monday and Thursday.')
     returning id into protocol_uuid;
   end if;
 

@@ -1287,6 +1287,20 @@ textarea:focus {
 .schedule-row p { margin: 0; color: #43564c; }
 
 .today-tasks-panel .panel-title-row p { margin: 4px 0 0; color: var(--muted); }
+.calendar-batch-filter {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid #cbd8d0;
+  border-radius: 9px;
+  background: #f7faf8;
+}
+.calendar-batch-filter > div:first-child { display: grid; gap: 3px; }
+.calendar-batch-filter span { color: var(--muted); font-size: 0.84rem; }
+.calendar-run-checkboxes { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.calendar-run-option { align-items: center; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--run-color) 26%, #d9e2dd); border-radius: 8px; background: color-mix(in srgb, var(--run-color) 8%, white); }
+.calendar-run-option i { width: 11px; height: 11px; flex: 0 0 auto; border-radius: 3px; background: var(--run-color); }
 .today-task-list { display: grid; gap: 10px; }
 .schedule-task {
   display: grid;

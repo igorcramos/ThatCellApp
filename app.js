@@ -125,6 +125,7 @@ const els = {
   printAllSchedules: document.querySelector("#printAllSchedules"),
   printRunSchedule: document.querySelector("#printRunSchedule"),
   printSchedule: document.querySelector("#printSchedule"),
+  calendarRunCheckboxes: document.querySelector("#calendarRunCheckboxes"),
   eventsList: document.querySelector("#eventsList"),
   cultureCellLineCheckboxes: document.querySelector("#cultureCellLineCheckboxes"),
   vesselCultureSelect: document.querySelector("#vesselCultureSelect"),
@@ -1705,20 +1706,22 @@ function buildRunSchedule(run) {
   const tasks = state.protocolTasks
     .filter((task) => task.protocol_id === run.protocol_id)
     .map((task) => ({ ...task, kind: "task", date: addDays(run.day_zero_date, task.task_day) }));
-  const taskDays = new Set(tasks.map((task) => task.task_day));
+  const isMediumTask = (task) => Boolean(task.medium)
+    || ["Media change", "Factor addition", "Replating"].includes(task.task_type);
+  const explicitMediumDays = new Set(tasks.filter(isMediumTask).map((task) => Number(task.task_day)));
   const duration = state.differentiationProtocols.find((protocol) => protocol.id === run.protocol_id)?.expected_duration_days ?? 90;
   const automaticChanges = [];
-  let lastChangeDay = null;
   for (let day = 3; day <= duration; day += 1) {
     const date = addDays(run.day_zero_date, day);
     const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
-    const isPreferredDay = [1, 3, 5].includes(weekday);
-    const mustChange = lastChangeDay !== null && day - lastChangeDay >= 3;
-    if (!taskDays.has(day) && (isPreferredDay || mustChange)) {
+    const isMaintenancePhase = day > 31;
+    const preferredWeekdays = isMaintenancePhase ? [1, 4] : [1, 3, 5];
+    const isPreferredDay = preferredWeekdays.includes(weekday);
+    const adjacentToExplicitChange = explicitMediumDays.has(day - 1) || explicitMediumDays.has(day + 1);
+    const adjacentToAutomaticChange = automaticChanges.some((change) => Math.abs(change.task_day - day) <= 1);
+    if (isPreferredDay && !explicitMediumDays.has(day) && !adjacentToExplicitChange && !adjacentToAutomaticChange) {
       automaticChanges.push({ kind: "automatic", task_day: day, date, title: day >= 31 ? "Maintenance medium change" : "Medium change", medium: automaticMediumForDay(day) });
-      lastChangeDay = day;
     }
-    if (taskDays.has(day)) lastChangeDay = day;
   }
   const collections = state.differentiationEvents
     .filter((event) => event.differentiation_run_id === run.id && event.event_type === "Collection")
@@ -1764,6 +1767,15 @@ function renderTodayDifferentiationTasks() {
   els.todayDifferentiationTasks.innerHTML = due.length
     ? due.map(({ run, item }) => scheduleTaskHtml(run, item, true)).join("")
     : '<div class="empty-state">No differentiation tasks scheduled for today.</div>';
+}
+
+function renderCalendarRunFilters() {
+  const wasInitialized = Boolean(els.calendarRunCheckboxes.querySelector("input"));
+  const previousSelection = new Set(getCheckedValues(els.calendarRunCheckboxes));
+  const runs = state.differentiationRuns.filter((run) => run.status === "active" && buildRunSchedule(run).length > 0);
+  els.calendarRunCheckboxes.innerHTML = runs.length
+    ? runs.map((run) => `<label class="checkbox-label calendar-run-option" style="--run-color:${escapeHtml(runScheduleColor(run))}"><input type="checkbox" value="${run.id}" ${!wasInitialized || previousSelection.has(run.id) ? "checked" : ""}><i aria-hidden="true"></i>${escapeHtml(differentiationRunLabel(run))}</label>`).join("")
+    : '<div class="empty-state">No active batches have scheduled activities.</div>';
 }
 
 function renderRunSchedule() {
@@ -2249,6 +2261,7 @@ function renderAll() {
   renderDifferentiationRuns();
   renderRunSchedule();
   renderTodayDifferentiationTasks();
+  renderCalendarRunFilters();
   renderEvents();
   renderProjects();
   renderMetrics();
@@ -3449,15 +3462,18 @@ function printableScheduleEntryHtml({ run, item }) {
 }
 
 function printableScheduleHtml(runs) {
-  const entries = runs.flatMap((run) => buildRunSchedule(run).map((item) => ({
+  const scheduledRuns = runs.filter((run) => buildRunSchedule(run).length > 0);
+  const entries = scheduledRuns.flatMap((run) => buildRunSchedule(run).map((item) => ({
     date: dateValueString(item.date),
     run,
     item,
   }))).sort((a, b) => a.date.localeCompare(b.date));
   const months = window.ScheduleCalendar?.buildMonths(entries) || [];
-  const legend = runs.map((run) => `<span style="--run-color:${escapeHtml(runScheduleColor(run))}"><i></i>${escapeHtml(differentiationRunLabel(run))}</span>`).join("");
   const weekdays = printableScheduleWeekdays();
-  return months.map((month) => `<section class="print-month" style="--calendar-weeks:${month.weeks}">
+  return months.map((month) => {
+    const monthRunIds = new Set(month.cells.filter(Boolean).flatMap((cell) => cell.entries.map((entry) => entry.run.id)));
+    const legend = scheduledRuns.filter((run) => monthRunIds.has(run.id)).map((run) => `<span style="--run-color:${escapeHtml(runScheduleColor(run))}"><i></i>${escapeHtml(differentiationRunLabel(run))}</span>`).join("");
+    return `<section class="print-month" style="--calendar-weeks:${month.weeks}">
     <header class="print-month-header">
       <div><p>${escapeHtml(printableScheduleText("Monthly differentiation calendar"))}</p><h1>${escapeHtml(printableScheduleMonthTitle(month.key))}</h1><small>${escapeHtml(printableScheduleText("Generated"))} ${escapeHtml(formatDate(todayValue()))}</small></div>
       <div class="print-legend">${legend}</div>
@@ -3466,13 +3482,14 @@ function printableScheduleHtml(runs) {
     <div class="print-calendar-grid">${month.cells.map((cell) => cell
       ? `<section class="print-calendar-day"><time datetime="${escapeHtml(cell.date)}">${cell.day}</time><div class="print-calendar-events">${cell.entries.map(printableScheduleEntryHtml).join("")}</div></section>`
       : '<section class="print-calendar-day is-empty" aria-hidden="true"></section>').join("")}</div>
-  </section>`).join("");
+  </section>`;
+  }).join("");
 }
 
 function printSchedules(onlySelectedRun = false) {
   const runs = onlySelectedRun
     ? state.differentiationRuns.filter((run) => run.id === els.scheduleRunSelect.value)
-    : state.differentiationRuns.filter((run) => run.status === "active");
+    : state.differentiationRuns.filter((run) => getCheckedValues(els.calendarRunCheckboxes).includes(run.id));
   if (!runs.length) return showToast("No differentiation runs available to export.");
   const printable = printableScheduleHtml(runs);
   if (!printable) return showToast("No scheduled items available to export.");
