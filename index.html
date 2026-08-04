@@ -4,8 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ThatCellApp</title>
-    <link rel="stylesheet" href="styles.css?v=20260808a">
-    <link rel="stylesheet" href="reagent-operations.css?v=20260807a">
+    <link rel="stylesheet" href="styles.css?v=20260810a">
+    <link rel="stylesheet" href="reagent-operations.css?v=20260810a">
     <link rel="stylesheet" href="culture-media.css?v=20260808a">
   </head>
   <body>
@@ -38,9 +38,14 @@
       <div class="auth-card">
         <div>
           <p class="eyebrow">Secure lab access</p>
-          <h2 id="authTitle">Sign in without a password</h2>
-          <p>Use your work email. We will send a secure sign-in link; your session stays active on this device.</p>
+          <h2 id="authTitle">Sign in with Google</h2>
+          <p>Use your Google account for secure access. Magic links remain available as a backup.</p>
         </div>
+        <button class="google-button" id="googleSignInButton" type="button">
+          <span class="google-mark" aria-hidden="true">G</span>
+          Continue with Google
+        </button>
+        <div class="auth-divider"><span>or use email</span></div>
         <form id="authForm" class="auth-form">
           <label>
             Email
@@ -147,7 +152,7 @@
               <h3>Today’s differentiation tasks</h3>
               <p>Check off work to record it automatically in Activity.</p>
             </div>
-            <button class="secondary-button" id="printAllSchedules" type="button">Print schedules</button>
+            <button class="secondary-button" id="printAllSchedules" type="button">Export monthly calendar</button>
           </div>
           <div id="todayDifferentiationTasks" class="today-task-list"></div>
         </div>
@@ -867,10 +872,21 @@
               <option value="discarded">Discarded</option>
             </select>
           </label>
-          <label>
-            Schedule color
-            <input name="schedule_color" type="color" value="#176f64">
-          </label>
+          <fieldset class="wide batch-color-field">
+            <legend>Batch color</legend>
+            <p>Choose a distinct color for this batch. It will identify the batch throughout schedules and exported calendars.</p>
+            <div class="batch-color-controls">
+              <div class="batch-color-palette" id="differentiationColorPalette" role="group" aria-label="Batch color presets"></div>
+              <label class="batch-custom-color">
+                Custom color
+                <input id="differentiationCustomColor" name="schedule_color" type="color" value="#176f64" aria-label="Custom batch color">
+              </label>
+              <div class="batch-color-preview" id="differentiationColorPreview">
+                <span>Batch preview</span>
+                <strong id="differentiationColorPreviewName">New batch</strong>
+              </div>
+            </div>
+          </fieldset>
           <label class="wide">
             Notes
             <textarea name="notes" rows="3" placeholder="Run notes"></textarea>
@@ -892,7 +908,7 @@
             </div>
             <div class="filter-row">
               <select id="scheduleRunSelect" aria-label="Choose a differentiation run"></select>
-              <button class="secondary-button" id="printRunSchedule" type="button">Print schedule</button>
+              <button class="secondary-button" id="printRunSchedule" type="button">Export calendar</button>
             </div>
           </div>
           <div id="runSchedule" class="run-schedule"></div>
@@ -950,15 +966,19 @@
             <div class="form-actions">
               <button class="secondary-button" id="startReagentScanner" type="button">Use camera</button>
               <label class="secondary-button file-button">
-                Scan image
-                <input id="reagentBarcodeImage" type="file" accept="image/*">
+                Take photo
+                <input id="reagentBarcodeImage" type="file" accept="image/*" capture="environment">
+              </label>
+              <label class="secondary-button file-button">
+                Choose photo
+                <input id="reagentBarcodeImageUpload" type="file" accept="image/*">
               </label>
             </div>
             <div class="scanner-stage is-hidden" id="reagentScannerStage">
               <video id="reagentScannerVideo" muted playsinline aria-label="Barcode camera preview"></video>
               <button class="secondary-button" id="stopReagentScanner" type="button">Stop camera</button>
             </div>
-            <p class="field-help" id="reagentScannerStatus" role="status" aria-live="polite">Camera scanning needs HTTPS or localhost and browser permission. Manual entry always works.</p>
+            <p class="field-help scanner-status" id="reagentScannerStatus" role="status" aria-live="polite">Checking camera compatibility…</p>
           </section>
 
           <section class="table-panel reagent-operation-card" aria-labelledby="reagentAlertsTitle">
@@ -1464,11 +1484,14 @@
 
     <script src="supabase-js.min.js?v=20260714a"></script>
     <script src="supabase-local.js?v=20260714a"></script>
-    <script src="i18n.js?v=20260808a"></script>
-    <script src="app.js?v=20260808a"></script>
+    <script src="i18n.js?v=20260810a"></script>
+    <script src="zxing-browser.min.js?v=0.2.0"></script>
+    <script src="barcode-scanner.js?v=20260810a"></script>
+    <script src="schedule-calendar.js?v=20260809a"></script>
+    <script src="app.js?v=20260809c"></script>
     <script src="reagent-inventory.js?v=20260805b"></script>
     <script src="reagent-checklists.js?v=20260807a"></script>
-    <script src="reagent-operations.js?v=20260805b"></script>
+    <script src="reagent-operations.js?v=20260810a"></script>
     <script src="culture-media.js?v=20260808a"></script>
   </body>
 </html>

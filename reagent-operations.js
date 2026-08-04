@@ -4,6 +4,7 @@ const reagentOpsState = {
   scannerStream: null,
   scannerTimer: null,
   scannerBusy: false,
+  scannerDecoder: null,
 };
 
 const reagentOpsEls = {
@@ -12,6 +13,7 @@ const reagentOpsEls = {
   scanStart: document.querySelector("#startReagentScanner"),
   scanStop: document.querySelector("#stopReagentScanner"),
   scanFile: document.querySelector("#reagentBarcodeImage"),
+  scanUpload: document.querySelector("#reagentBarcodeImageUpload"),
   scanStage: document.querySelector("#reagentScannerStage"),
   scanVideo: document.querySelector("#reagentScannerVideo"),
   scanStatus: document.querySelector("#reagentScannerStatus"),
@@ -70,7 +72,46 @@ function showCatalogMessage(message = "") {
 
 function setScannerStatus(message, isError = false) {
   reagentOpsEls.scanStatus.textContent = message;
-  reagentOpsEls.scanStatus.style.color = isError ? "var(--danger)" : "";
+  reagentOpsEls.scanStatus.classList.toggle("is-error", isError);
+}
+
+function scannerIsEmbedded() {
+  try {
+    return window.self !== window.top;
+  } catch (_error) {
+    return true;
+  }
+}
+
+function renderScannerReadiness() {
+  const readiness = window.BarcodeScanner?.scannerReadiness(window) || "decoder-unavailable";
+  reagentOpsEls.scanStart.disabled = readiness !== "ready";
+  if (readiness === "ready") {
+    setScannerStatus("Ready to scan. The browser will ask for camera permission the first time.");
+  } else if (readiness === "insecure") {
+    setScannerStatus("Live camera needs the secure published app. You can still take or choose a photo, or type the code.", true);
+  } else if (readiness === "camera-unavailable") {
+    setScannerStatus(scannerIsEmbedded()
+      ? "This in-app browser does not provide live camera access. Open the published app directly in Safari or Chrome, take or choose a photo, or type the code."
+      : "Live camera access is unavailable here. Take or choose a photo, or type the code.", true);
+  } else {
+    setScannerStatus("The barcode scanner did not load. Refresh the page, or type the printed code.", true);
+  }
+}
+
+function cameraFailureStatus(error) {
+  const kind = window.BarcodeScanner?.classifyCameraError(error) || "camera-error";
+  if (kind === "permission-denied") {
+    return "Camera permission was denied. Allow camera access for this site in browser settings, then try again. You can also take or choose a photo.";
+  }
+  if (kind === "camera-not-found") return "No camera was found on this device. Take or choose an existing photo, or type the code.";
+  if (kind === "camera-busy") return "The camera is being used by another app or tab. Close it there and try again, or take or choose a photo.";
+  if (kind === "camera-security") return "The browser blocked camera access in this window. Open the published app directly in Safari or Chrome, or take or choose a photo.";
+  if (kind === "camera-aborted") return "Camera access was interrupted. Try again, take or choose a photo, or type the code.";
+  if (kind === "camera-timeout") return "The camera permission request took too long. Try again and answer the browser prompt, or take or choose a photo.";
+  return scannerIsEmbedded()
+    ? "The in-app browser could not start the camera. Open the published app directly in Safari or Chrome, or take or choose a photo."
+    : `The camera could not start${error?.message ? `: ${error.message}` : "."} Take or choose a photo, or type the code.`;
 }
 
 function focusInventoryCode(code, item) {
@@ -132,20 +173,13 @@ function lookupReagentCode(rawValue) {
   prepareCatalogForUnknownCode(code);
 }
 
-async function makeBarcodeDetector() {
-  if (!("BarcodeDetector" in window)) throw new Error("This browser does not provide BarcodeDetector.");
-  const preferred = ["qr_code", "ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "data_matrix"];
-  if (typeof BarcodeDetector.getSupportedFormats !== "function") return new BarcodeDetector();
-  const supported = await BarcodeDetector.getSupportedFormats();
-  const formats = preferred.filter((format) => supported.includes(format));
-  return formats.length ? new BarcodeDetector({ formats }) : new BarcodeDetector();
-}
-
 function stopReagentScanner(message = "Camera stopped.") {
   if (reagentOpsState.scannerTimer) window.clearTimeout(reagentOpsState.scannerTimer);
   reagentOpsState.scannerTimer = null;
   reagentOpsState.scannerStream?.getTracks().forEach((track) => track.stop());
   reagentOpsState.scannerStream = null;
+  reagentOpsState.scannerDecoder?.dispose?.();
+  reagentOpsState.scannerDecoder = null;
   reagentOpsEls.scanVideo.srcObject = null;
   reagentOpsEls.scanStage.classList.add("is-hidden");
   reagentOpsState.scannerBusy = false;
@@ -176,59 +210,67 @@ async function scanVideoFrame(detector) {
 
 async function startReagentScanner() {
   stopReagentScanner("");
-  if (!window.isSecureContext) {
-    setScannerStatus("Camera access requires HTTPS or localhost. Type the code or use an image instead.", true);
-    return;
-  }
-  if (!navigator.mediaDevices?.getUserMedia) {
-    setScannerStatus("Camera access is unavailable in this browser. Type the code instead.", true);
+  const readiness = window.BarcodeScanner?.scannerReadiness(window) || "decoder-unavailable";
+  if (readiness !== "ready") {
+    renderScannerReadiness();
     return;
   }
   reagentOpsEls.scanStart.disabled = true;
+  let phase = "decoder";
   try {
-    const detector = await makeBarcodeDetector();
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+    setScannerStatus("Preparing the scanner…");
+    const detector = await window.BarcodeScanner.createDecoder(window);
+    reagentOpsState.scannerDecoder = detector;
+    phase = "camera";
+    setScannerStatus("Requesting camera access… Approve the browser prompt to continue.");
+    const stream = await window.BarcodeScanner.requestCameraStream(navigator.mediaDevices);
     reagentOpsState.scannerStream = stream;
     reagentOpsEls.scanVideo.srcObject = stream;
-    await reagentOpsEls.scanVideo.play();
     reagentOpsEls.scanStage.classList.remove("is-hidden");
+    phase = "video";
+    await reagentOpsEls.scanVideo.play();
     setScannerStatus("Point the rear camera at a barcode or QR code.");
     scanVideoFrame(detector);
   } catch (error) {
-    const denied = error?.name === "NotAllowedError";
-    setScannerStatus(denied
-      ? "Camera permission was denied. Allow camera access in the browser settings, or type the code."
-      : `Camera scanning is unavailable: ${error.message} Type the code instead.`, true);
+    stopReagentScanner("");
+    setScannerStatus(phase === "decoder"
+      ? "The barcode scanner could not initialize. Refresh the page, take or choose a photo, or type the printed code."
+      : cameraFailureStatus(error), true);
   } finally {
-    reagentOpsEls.scanStart.disabled = false;
+    reagentOpsEls.scanStart.disabled = window.BarcodeScanner?.scannerReadiness(window) !== "ready";
   }
 }
 
 async function scanReagentImage(file) {
   if (!file) return;
-  reagentOpsEls.scanFile.disabled = true;
+  [reagentOpsEls.scanFile, reagentOpsEls.scanUpload].forEach((input) => { input.disabled = true; });
+  let imageUrl = "";
+  let detector = null;
   try {
-    const detector = await makeBarcodeDetector();
-    let imageSource;
-    if ("createImageBitmap" in window) {
-      imageSource = await createImageBitmap(file);
-    } else {
-      imageSource = new Image();
-      imageSource.src = URL.createObjectURL(file);
-      await imageSource.decode();
-    }
+    setScannerStatus("Scanning the photo…");
+    detector = await window.BarcodeScanner.createDecoder(window);
+    imageUrl = URL.createObjectURL(file);
+    const imageSource = new Image();
+    await new Promise((resolve, reject) => {
+      imageSource.onload = resolve;
+      imageSource.onerror = () => reject(new Error("The selected image could not be opened."));
+      imageSource.src = imageUrl;
+    });
     const results = await detector.detect(imageSource);
-    if (typeof imageSource.close === "function") imageSource.close();
     if (!results.length) {
-      setScannerStatus("No supported barcode was found in the image. Try a sharper crop or type the value.", true);
+      setScannerStatus("No barcode was found in the photo. Try again with the code sharp, close, and well lit, or type the value.", true);
       return;
     }
     lookupReagentCode(results[0].rawValue);
   } catch (error) {
-    setScannerStatus(`Image scanning is unavailable: ${error.message} Type the printed value instead.`, true);
+    setScannerStatus(`The photo could not be scanned${error?.message ? `: ${error.message}` : "."} Try another photo or type the printed value.`, true);
   } finally {
-    reagentOpsEls.scanFile.disabled = false;
-    reagentOpsEls.scanFile.value = "";
+    detector?.dispose?.();
+    if (imageUrl) URL.revokeObjectURL(imageUrl);
+    [reagentOpsEls.scanFile, reagentOpsEls.scanUpload].forEach((input) => {
+      input.disabled = false;
+      input.value = "";
+    });
   }
 }
 
@@ -629,6 +671,7 @@ reagentOpsEls.barcodeInput.addEventListener("keydown", (event) => { if (event.ke
 reagentOpsEls.scanStart.addEventListener("click", startReagentScanner);
 reagentOpsEls.scanStop.addEventListener("click", () => stopReagentScanner());
 reagentOpsEls.scanFile.addEventListener("change", (event) => scanReagentImage(event.currentTarget.files?.[0]));
+reagentOpsEls.scanUpload.addEventListener("change", (event) => scanReagentImage(event.currentTarget.files?.[0]));
 reagentOpsEls.warningDays.addEventListener("input", renderReagentAlerts);
 reagentOpsEls.catalogForm.addEventListener("submit", handleCatalogSubmit);
 reagentOpsEls.csvInput.addEventListener("change", (event) => handleCsvSelection(event.currentTarget.files?.[0]));
@@ -640,11 +683,14 @@ document.addEventListener("reagents:loaded", handleReagentsLoaded);
 document.addEventListener("visibilitychange", () => { if (document.hidden && reagentOpsState.scannerStream) stopReagentScanner("Camera stopped because the page was hidden."); });
 window.addEventListener("beforeunload", () => stopReagentScanner(""));
 window.addEventListener("app:languagechange", () => {
+  if (!reagentOpsState.scannerStream) renderScannerReadiness();
   renderReagentAlerts();
   renderReagentQuality();
   populatePurchaseCatalog();
   renderPurchaseRequests();
 });
+
+renderScannerReadiness();
 
 if (db?.auth?.onAuthStateChange) {
   db.auth.onAuthStateChange((_event, session) => {

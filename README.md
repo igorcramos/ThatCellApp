@@ -39,9 +39,25 @@ Simple web app for cell culture tracking using Supabase.
 
 ## Login options
 
-The secure mode uses Supabase email magic links or optional one-time codes. The
-app does not request or store passwords. Sessions persist on the current device,
-and new users remain pending until an administrator assigns project access.
+The secure mode uses Supabase Auth with Google sign-in as the primary path, plus
+email magic links or optional one-time codes as a backup. The app does not
+request or store passwords. Sessions persist on the current device, and new
+users remain pending until an administrator assigns project access.
+
+Google sign-in also requires provider setup outside this repo:
+
+- Supabase Dashboard > Authentication > Providers > Google: enable Google and
+  add the Google OAuth Client ID and Client Secret.
+- Supabase Dashboard > Authentication > URL Configuration:
+  - Site URL: `https://igorcramos.github.io/ThatCellApp/`
+  - Redirect URLs: `https://igorcramos.github.io/ThatCellApp/` and
+    `http://localhost:5173/**`
+- Google Cloud OAuth Client:
+  - Authorized JavaScript origins:
+    `https://igorcramos.github.io` and `http://localhost:5173`
+  - Authorized redirect URI: the Supabase callback URL shown on the Google
+    provider page, usually
+    `https://rqvpzurlaxlopmhxivcn.supabase.co/auth/v1/callback`
 
 ## How to open locally
 

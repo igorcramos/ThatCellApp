@@ -1,4 +1,4 @@
-# Passwordless authentication rollout
+# Authentication rollout
 
 The new login is intentionally dormant until `app_security_status` is created by
 `supabase/2026-08-06_secure_passwordless_auth.sql`. Deploying the HTML/JavaScript
@@ -14,28 +14,39 @@ first does not interrupt the current public prototype mode.
    - Additional redirect URL: `http://localhost:5173/**`
    - Add any staging URL that will actually be used. Do not add broad production
      wildcards.
-4. Keep the email provider enabled. The standard magic-link template works with
-   the primary button. The optional six-digit-code form only works when the email
-   template also sends the OTP token.
-5. Choose the first administrator email. For the strictest onboarding, create
+4. Enable Google sign-in:
+   - In **Google Cloud Console > APIs & Services > Credentials**, create an
+     OAuth Client ID for a web application.
+   - Add Authorized JavaScript origins:
+     `https://igorcramos.github.io` and `http://localhost:5173`.
+   - Add the Supabase callback URL from
+     **Supabase > Authentication > Providers > Google**, usually
+     `https://rqvpzurlaxlopmhxivcn.supabase.co/auth/v1/callback`, as an
+     Authorized redirect URI.
+   - In **Supabase > Authentication > Providers > Google**, enable Google and
+     paste the Google Client ID and Client Secret.
+5. Keep the email provider enabled as a fallback. The standard magic-link
+   template works with the email form. The optional six-digit-code form only
+   works when the email template also sends the OTP token.
+6. Choose the first administrator email. For the strictest onboarding, create
    that user in **Authentication > Users** first and disable open sign-ups after
    the team is provisioned. If sign-ups stay enabled, new accounts are still
    created as inactive and cannot read lab data until an administrator assigns a
    project.
-6. Run the migrations in this order:
+7. Run the migrations in this order:
    1. `supabase/2026-08-04_reagent_inventory.sql` (already run)
    2. `supabase/2026-08-05_reagent_operations.sql`
    3. `supabase/2026-08-06_secure_passwordless_auth.sql`
-7. Before running step 6.3, replace both occurrences of
+8. Before running step 7.3, replace both occurrences of
    `YOUR_ADMIN_EMAIL@example.com` with the exact lowercase admin email. The file
    is transactional and stops before activation when the placeholder is left in
    place. If Auth already contains users, it also stops unless the configured
    administrator exists.
-8. Reload the app, request a sign-in link, and open it in the same browser. The
-   designated account becomes the active administrator. Existing records with no
-   owner are claimed by that account and all existing projects/cultures are added
-   to it.
-9. Test in a private browser window: the login panel should appear and no lab
+9. Reload the app and sign in with Google using the designated administrator
+   email. That account becomes the active administrator. Existing records with
+   no owner are claimed by that account and all existing projects/cultures are
+   added to it.
+10. Test in a private browser window: the login panel should appear and no lab
    records or photos should be available without a session.
 
 ## Opening a downloaded/local copy

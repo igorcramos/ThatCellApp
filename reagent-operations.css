@@ -47,6 +47,15 @@
   object-fit: cover;
 }
 
+.scanner-status {
+  min-height: 2.6em;
+  margin: 0;
+}
+
+.scanner-status.is-error {
+  color: var(--danger);
+}
+
 .compact-field {
   display: flex;
   align-items: center;
@@ -81,9 +90,11 @@
 }
 
 .reagent-mini-metric span {
+  min-width: 0;
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .reagent-mini-metric.is-warning {
@@ -426,10 +437,36 @@
 }
 
 @media (max-width: 760px) {
+  #reagentsView .section-heading {
+    margin-bottom: 16px;
+  }
+
+  #reagentsView > .form-grid,
+  #reagentsView > .table-panel,
+  #reagentsView .reagent-checklist-panel {
+    margin-bottom: 16px;
+  }
+
   .reagent-operations-grid,
   .reagent-metrics,
   .barcode-input-row {
     grid-template-columns: 1fr;
+  }
+
+  .reagent-operations-grid {
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .reagent-operation-card {
+    gap: 11px;
+    padding: 14px;
+  }
+
+  .reagent-operation-card .panel-subtitle,
+  .reagent-checklist-panel .panel-subtitle {
+    font-size: 0.8rem;
+    line-height: 1.4;
   }
 
   .reagent-operation-card:first-child {
@@ -438,6 +475,16 @@
 
   .reagent-tools-layout {
     padding: 14px;
+  }
+
+  .reagent-checklist-panel {
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .reagent-checklist-layout > section {
+    gap: 11px;
+    padding: 12px;
   }
 
   .reagent-checklist-summary,

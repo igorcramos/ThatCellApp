@@ -67,12 +67,26 @@ const projectColors = {
   "APOE-TAU": "#8c4f9f",
 };
 
+const differentiationBatchColors = Object.freeze([
+  "#176f64",
+  "#2f6b9a",
+  "#6b5ca5",
+  "#a45178",
+  "#c0603e",
+  "#b47a16",
+  "#4f7a3b",
+  "#447c86",
+  "#7a5a43",
+  "#5c6670",
+]);
+
 const els = {
   authPanel: document.querySelector("#authPanel"),
   authForm: document.querySelector("#authForm"),
   authOtpForm: document.querySelector("#authOtpForm"),
   authMessage: document.querySelector("#authMessage"),
   authFileWarning: document.querySelector("#authFileWarning"),
+  googleSignInButton: document.querySelector("#googleSignInButton"),
   magicLinkButton: document.querySelector("#magicLinkButton"),
   verifyOtpButton: document.querySelector("#verifyOtpButton"),
   userStrip: document.querySelector("#userStrip"),
@@ -87,6 +101,10 @@ const els = {
   protocolForm: document.querySelector("#protocolForm"),
   protocolTaskForm: document.querySelector("#protocolTaskForm"),
   differentiationRunForm: document.querySelector("#differentiationRunForm"),
+  differentiationColorPalette: document.querySelector("#differentiationColorPalette"),
+  differentiationCustomColor: document.querySelector("#differentiationCustomColor"),
+  differentiationColorPreview: document.querySelector("#differentiationColorPreview"),
+  differentiationColorPreviewName: document.querySelector("#differentiationColorPreviewName"),
   collectionForm: document.querySelector("#collectionForm"),
   eventForm: document.querySelector("#eventForm"),
   cellLinesList: document.querySelector("#cellLinesList"),
@@ -1577,6 +1595,51 @@ function renderProtocolTasks() {
     .join("");
 }
 
+function normalizedBatchColor(value, fallback = "#176f64") {
+  const color = String(value || "").trim().toLowerCase();
+  return /^#[0-9a-f]{6}$/.test(color) ? color : fallback;
+}
+
+function nextDifferentiationBatchColor(excludeRunId = null) {
+  const usedColors = state.differentiationRuns
+    .filter((run) => run.id !== excludeRunId)
+    .map((run) => normalizedBatchColor(run.schedule_color, ""));
+  return window.ScheduleCalendar?.nextAvailableColor(differentiationBatchColors, usedColors) || differentiationBatchColors[0];
+}
+
+function updateDifferentiationColorPreviewName() {
+  if (!els.differentiationColorPreviewName) return;
+  els.differentiationColorPreviewName.textContent = valueOrNull(els.differentiationRunForm?.elements.run_name?.value)
+    || printableScheduleText("New batch");
+}
+
+function syncDifferentiationBatchColor(value, userSelected = false) {
+  const color = normalizedBatchColor(value);
+  if (els.differentiationCustomColor) els.differentiationCustomColor.value = color;
+  if (userSelected && els.differentiationRunForm) els.differentiationRunForm.dataset.colorUserSelected = "true";
+  els.differentiationColorPalette?.querySelectorAll("[data-batch-color]").forEach((button) => {
+    const selected = button.dataset.batchColor === color;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
+  if (els.differentiationColorPreview) els.differentiationColorPreview.style.setProperty("--batch-color", color);
+  updateDifferentiationColorPreviewName();
+}
+
+function renderDifferentiationColorPalette() {
+  if (!els.differentiationColorPalette) return;
+  els.differentiationColorPalette.innerHTML = differentiationBatchColors.map((color, index) => `
+    <button class="batch-color-swatch" data-batch-color="${color}" type="button" aria-pressed="false" aria-label="${escapeHtml(`${printableScheduleText("Color option")} ${index + 1}: ${color}`)}" style="--batch-color:${color}"><span aria-hidden="true"></span></button>
+  `).join("");
+  syncDifferentiationBatchColor(els.differentiationCustomColor?.value || nextDifferentiationBatchColor());
+}
+
+function refreshNewDifferentiationBatchColor() {
+  if (valueOrNull(els.differentiationRunForm?.elements.id?.value)) return;
+  if (els.differentiationRunForm?.dataset.colorUserSelected === "true") return;
+  syncDifferentiationBatchColor(nextDifferentiationBatchColor());
+}
+
 function renderDifferentiationRuns() {
   if (state.differentiationRuns.length === 0) {
     els.differentiationRunsList.innerHTML = '<div class="empty-state">No differentiation runs started yet.</div>';
@@ -1586,6 +1649,7 @@ function renderDifferentiationRuns() {
   els.differentiationRunsList.innerHTML = state.differentiationRuns
     .map((run) => {
       const protocol = state.differentiationProtocols.find((item) => item.id === run.protocol_id);
+      const batchColor = runScheduleColor(run);
       const currentDay = daysSince(run.day_zero_date);
       const meta = [
         projectForDifferentiationRun(run),
@@ -1600,9 +1664,9 @@ function renderDifferentiationRuns() {
         .sort((a, b) => (a.task_day ?? 0) - (b.task_day ?? 0))
         .slice(0, 5);
       return `
-        <article class="item">
+        <article class="item differentiation-run-card" style="--run-color:${escapeHtml(batchColor)}">
           <div>
-            <div class="item-title">${escapeHtml(run.run_name)}</div>
+            <div class="item-title differentiation-run-title"><span aria-hidden="true"></span>${escapeHtml(run.run_name)}</div>
             <div class="item-meta">
               ${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
             </div>
@@ -1618,7 +1682,7 @@ function renderDifferentiationRuns() {
             ` : ""}
           </div>
           <div class="item-actions">
-            <span class="badge">${escapeHtml(run.status || "active")}</span>
+            <span class="badge differentiation-run-status">${escapeHtml(run.status || "active")}</span>
             <button class="icon-button edit-button" data-edit-differentiation-run="${run.id}" type="button" title="Edit differentiation" aria-label="Edit differentiation">&#9998;</button>
             <button class="icon-button danger-button" data-delete-differentiation-run="${run.id}" type="button" title="Delete differentiation" aria-label="Delete differentiation">&#128465;</button>
           </div>
@@ -1672,7 +1736,7 @@ function completionEventForItem(run, item) {
 }
 
 function runScheduleColor(run) {
-  return run.schedule_color || projectColor(projectForDifferentiationRun(run)) || "#176f64";
+  return normalizedBatchColor(run.schedule_color, projectColor(projectForDifferentiationRun(run)) || "#176f64");
 }
 
 function actionableScheduleItems(run) {
@@ -2155,7 +2219,7 @@ function renderAuthState() {
   els.authForm?.classList.toggle("is-hidden", accessPending);
   els.authOtpForm?.closest(".auth-code-panel")?.classList.toggle("is-hidden", accessPending);
   const authTitle = document.querySelector("#authTitle");
-  if (authTitle) authTitle.textContent = accessPending ? "Access pending" : "Sign in without a password";
+  if (authTitle) authTitle.textContent = accessPending ? "Access pending" : "Sign in with Google";
   if (accessPending) {
     setAuthMessage("Your account is ready, but an administrator still needs to assign project or culture access.");
   } else if (!signedIn && els.authMessage?.textContent.startsWith("Your account is ready")) {
@@ -2201,7 +2265,7 @@ async function ensureCurrentProfile() {
     .maybeSingle();
   if (data?.id) return;
 
-  const fallbackName = user.user_metadata?.full_name || user.email?.split("@")[0] || "User";
+  const fallbackName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split("@")[0] || "User";
   const { error } = await db.from("profiles").insert({
     id: user.id,
     email: user.email,
@@ -2406,6 +2470,7 @@ async function loadAllInternal() {
   state.differentiationProtocols = differentiationTablesMissing ? [] : protocolsResult.data || [];
   state.protocolTasks = differentiationTablesMissing || protocolTasksMissing ? [] : protocolTasksResult.data || [];
   state.differentiationRuns = differentiationTablesMissing ? [] : differentiationRunsResult.data || [];
+  refreshNewDifferentiationBatchColor();
   state.differentiationRunWells = differentiationTablesMissing ? [] : differentiationRunWellsResult.data || [];
   state.differentiationRunCellLines = differentiationTablesMissing ? [] : differentiationRunCellLinesResult.data || [];
   state.differentiationEvents = differentiationTablesMissing ? [] : differentiationEventsResult.data || [];
@@ -3352,26 +3417,66 @@ async function toggleScheduledTask(button) {
   await loadAll();
 }
 
+function printableScheduleText(text) {
+  return window.translateAppText?.(text) || text;
+}
+
+function printableScheduleMonthTitle(monthKey) {
+  const locale = window.getAppLocale?.() || "en-US";
+  const label = new Intl.DateTimeFormat(locale, {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${monthKey}-01T12:00:00Z`));
+  return label.charAt(0).toLocaleUpperCase(locale) + label.slice(1);
+}
+
+function printableScheduleWeekdays() {
+  return Array.from({ length: 7 }, (_, index) => new Intl.DateTimeFormat(window.getAppLocale?.() || "en-US", {
+    weekday: "short",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(2026, 7, 2 + index))));
+}
+
+function printableScheduleEntryHtml({ run, item }) {
+  const detail = item.medium || [item.quantity, item.notes].filter(Boolean).join(" · ");
+  const title = printableScheduleText(item.title || item.experiment || "Collection");
+  return `<div class="print-calendar-event" style="--run-color:${escapeHtml(runScheduleColor(run))}">
+    <div><strong>${escapeHtml(run.run_name)}</strong><span>D${escapeHtml(item.task_day)}</span></div>
+    <h3>${escapeHtml(title)}</h3>
+    ${detail ? `<p>${escapeHtml(detail)}</p>` : ""}
+  </div>`;
+}
+
 function printableScheduleHtml(runs) {
-  const entries = runs.flatMap((run) => buildRunSchedule(run).map((item) => ({ run, item })))
-    .sort((a, b) => dateValueString(a.item.date).localeCompare(dateValueString(b.item.date)));
-  const legend = runs.map((run) => `<span><i style="background:${escapeHtml(runScheduleColor(run))}"></i>${escapeHtml(differentiationRunLabel(run))}</span>`).join("");
-  const groups = entries.reduce((map, entry) => {
-    const date = dateValueString(entry.item.date);
-    if (!map.has(date)) map.set(date, []);
-    map.get(date).push(entry);
-    return map;
-  }, new Map());
-  return `<header><h1>Organoid differentiation schedule</h1><p>Generated ${escapeHtml(formatDate(todayValue()))}</p><div class="print-legend">${legend}</div></header>
-    <div class="print-days">${Array.from(groups.entries()).map(([date, items]) => `<section class="print-day"><h2>${escapeHtml(formatDate(date))}</h2>${items.map(({ run, item }) => `<article style="--run-color:${escapeHtml(runScheduleColor(run))}"><div><strong>${escapeHtml(run.run_name)}</strong><span>D${escapeHtml(item.task_day)}</span></div><h3>${escapeHtml(item.title || item.experiment || "Collection")}</h3>${item.medium || item.quantity || item.notes ? `<p>${escapeHtml(item.medium || [item.quantity, item.notes].filter(Boolean).join(" · ") || item.notes)}</p>` : ""}</article>`).join("")}</section>`).join("")}</div>`;
+  const entries = runs.flatMap((run) => buildRunSchedule(run).map((item) => ({
+    date: dateValueString(item.date),
+    run,
+    item,
+  }))).sort((a, b) => a.date.localeCompare(b.date));
+  const months = window.ScheduleCalendar?.buildMonths(entries) || [];
+  const legend = runs.map((run) => `<span style="--run-color:${escapeHtml(runScheduleColor(run))}"><i></i>${escapeHtml(differentiationRunLabel(run))}</span>`).join("");
+  const weekdays = printableScheduleWeekdays();
+  return months.map((month) => `<section class="print-month" style="--calendar-weeks:${month.weeks}">
+    <header class="print-month-header">
+      <div><p>${escapeHtml(printableScheduleText("Monthly differentiation calendar"))}</p><h1>${escapeHtml(printableScheduleMonthTitle(month.key))}</h1><small>${escapeHtml(printableScheduleText("Generated"))} ${escapeHtml(formatDate(todayValue()))}</small></div>
+      <div class="print-legend">${legend}</div>
+    </header>
+    <div class="print-calendar-weekdays">${weekdays.map((weekday) => `<span>${escapeHtml(weekday)}</span>`).join("")}</div>
+    <div class="print-calendar-grid">${month.cells.map((cell) => cell
+      ? `<section class="print-calendar-day"><time datetime="${escapeHtml(cell.date)}">${cell.day}</time><div class="print-calendar-events">${cell.entries.map(printableScheduleEntryHtml).join("")}</div></section>`
+      : '<section class="print-calendar-day is-empty" aria-hidden="true"></section>').join("")}</div>
+  </section>`).join("");
 }
 
 function printSchedules(onlySelectedRun = false) {
   const runs = onlySelectedRun
     ? state.differentiationRuns.filter((run) => run.id === els.scheduleRunSelect.value)
     : state.differentiationRuns.filter((run) => run.status === "active");
-  if (!runs.length) return showToast("No differentiation runs available to print.");
-  els.printSchedule.innerHTML = printableScheduleHtml(runs);
+  if (!runs.length) return showToast("No differentiation runs available to export.");
+  const printable = printableScheduleHtml(runs);
+  if (!printable) return showToast("No scheduled items available to export.");
+  els.printSchedule.innerHTML = printable;
   window.print();
 }
 
@@ -3410,7 +3515,7 @@ async function handleDifferentiationRunSubmit(event) {
     source_culture_id: sourceType === "culture" ? valueOrNull(data.get("source_culture_id")) : null,
     source_vessel_id: sourceVesselId,
     status: valueOrNull(data.get("status")) || "active",
-    schedule_color: valueOrNull(data.get("schedule_color")) || "#176f64",
+    schedule_color: normalizedBatchColor(data.get("schedule_color")),
     notes: valueOrNull(data.get("notes")),
   };
 
@@ -3632,6 +3737,25 @@ function setAuthMessage(message, isError = false) {
   els.authMessage.classList.toggle("is-error", isError);
 }
 
+async function handleGoogleSignIn() {
+  if (!ensureDb()) return;
+  const redirectTo = authRedirectUrl();
+  els.googleSignInButton.disabled = true;
+  const { error } = await db.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo,
+      queryParams: {
+        prompt: "select_account",
+      },
+    },
+  });
+  if (error) {
+    els.googleSignInButton.disabled = false;
+    setAuthMessage(`Could not start Google sign-in: ${error.message}`, true);
+  }
+}
+
 async function handleMagicLink(event) {
   event?.preventDefault();
   if (!ensureDb()) return;
@@ -3698,6 +3822,7 @@ async function initAuth() {
   }
   els.authForm?.addEventListener("submit", handleMagicLink);
   els.authOtpForm?.addEventListener("submit", handleOtpVerification);
+  els.googleSignInButton?.addEventListener("click", handleGoogleSignIn);
   els.signOutButton?.addEventListener("click", handleSignOut);
   db.auth.onAuthStateChange((event, session) => {
     if (!state.authAvailable) return;
@@ -3715,6 +3840,15 @@ async function initAuth() {
 
 function setupForms() {
   setupProgressiveDisclosure();
+  renderDifferentiationColorPalette();
+  els.differentiationColorPalette?.addEventListener("click", (event) => {
+    const swatch = event.target.closest("[data-batch-color]");
+    if (swatch) syncDifferentiationBatchColor(swatch.dataset.batchColor, true);
+  });
+  els.differentiationCustomColor?.addEventListener("input", (event) => {
+    syncDifferentiationBatchColor(event.currentTarget.value, true);
+  });
+  els.differentiationRunForm?.elements.run_name?.addEventListener("input", updateDifferentiationColorPreviewName);
   bindBusyForm(els.projectForm, handleProjectSubmit);
   bindBusyForm(els.cellLineForm, handleCellLineSubmit);
   bindBusyForm(els.cultureForm, handleCultureSubmit);
@@ -4260,7 +4394,7 @@ function fillDifferentiationRunForm(run) {
   setFieldValue(form, "source_culture_id", run.source_culture_id);
   setFieldValue(form, "source_vessel_id", run.source_vessel_id);
   setFieldValue(form, "status", run.status || "active");
-  setFieldValue(form, "schedule_color", run.schedule_color || runScheduleColor(run));
+  syncDifferentiationBatchColor(runScheduleColor(run));
   setFieldValue(form, "notes", run.notes);
   setCheckedValues(els.differentiationCellLineCheckboxes, cellLineIdsForRun(run.id));
   renderDifferentiationWellCheckboxes();
@@ -4277,9 +4411,10 @@ function fillDifferentiationRunForm(run) {
 
 function resetDifferentiationRunForm() {
   els.differentiationRunForm.reset();
+  delete els.differentiationRunForm.dataset.colorUserSelected;
   els.differentiationRunForm.elements.id.value = "";
   setDefaultDate(els.differentiationRunForm, "day_zero_date");
-  setFieldValue(els.differentiationRunForm, "schedule_color", "#176f64");
+  syncDifferentiationBatchColor(nextDifferentiationBatchColor());
   setCheckedValues(els.differentiationWellCheckboxes, []);
   setCheckedValues(els.differentiationCellLineCheckboxes, []);
   els.differentiationRunSubmitButton.textContent = "Start differentiation";
@@ -4464,5 +4599,6 @@ initAuth();
 
 window.addEventListener("app:languagechange", () => {
   renderAll();
+  renderDifferentiationColorPalette();
   setLastChecked();
 });
