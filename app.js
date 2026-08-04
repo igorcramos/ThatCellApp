@@ -2279,11 +2279,11 @@ async function loadAllInternal() {
     db.from("cell_lines").select("*").order("name", { ascending: true }),
     db
       .from("cultures")
-      .select("*, cell_lines!cell_line_id(name, full_name, identifier, clone)")
+      .select("*, cell_lines!cultures_cell_line_id_fkey(name, full_name, identifier, clone)")
       .order("created_at", { ascending: false }),
     db
       .from("culture_events")
-      .select("*, cultures(culture_name, passage_number, cell_lines!cell_line_id(name, full_name, identifier, clone))")
+      .select("*, cultures(culture_name, passage_number, cell_lines!cultures_cell_line_id_fkey(name, full_name, identifier, clone))")
       .order("event_date", { ascending: false })
       .order("created_at", { ascending: false }),
   ];
@@ -2330,11 +2330,11 @@ async function loadAllInternal() {
       .order("created_at", { ascending: false }),
     db
       .from("vessel_wells")
-      .select("*, cell_lines!cell_line_id(name, full_name, identifier, clone), cultures(culture_name, passage_number, cell_lines!cell_line_id(name, full_name, identifier, clone))")
+      .select("*, cell_lines!vessel_wells_cell_line_id_fkey(name, full_name, identifier, clone), cultures(culture_name, passage_number, cell_lines!cultures_cell_line_id_fkey(name, full_name, identifier, clone))")
       .order("well", { ascending: true }),
     db
       .from("vessel_cultures")
-      .select("*, cultures(culture_name, passage_number, cell_lines!cell_line_id(name, full_name, identifier, clone))"),
+      .select("*, cultures(culture_name, passage_number, cell_lines!cultures_cell_line_id_fkey(name, full_name, identifier, clone))"),
     db.from("culture_cell_lines").select("*"),
     db
       .from("cryo_boxes")
@@ -2343,7 +2343,7 @@ async function loadAllInternal() {
       .order("name", { ascending: true }),
     db
       .from("cryo_vials")
-      .select("*, cell_lines!cell_line_id(name, full_name, identifier, clone)")
+      .select("*, cell_lines!cryo_vials_cell_line_id_fkey(name, full_name, identifier, clone)")
       .order("position", { ascending: true }),
     db
       .from("differentiation_protocols")
@@ -2779,8 +2779,8 @@ async function handleCultureSubmit(event) {
 
   const editingId = valueOrNull(data.get("id"));
   const query = editingId
-    ? db.from("cultures").update(payload).eq("id", editingId).select("*, cell_lines!cell_line_id(name, full_name, identifier, clone)").single()
-    : db.from("cultures").insert(payload).select("*, cell_lines!cell_line_id(name, full_name, identifier, clone)").single();
+    ? db.from("cultures").update(payload).eq("id", editingId).select("*, cell_lines!cultures_cell_line_id_fkey(name, full_name, identifier, clone)").single()
+    : db.from("cultures").insert(payload).select("*, cell_lines!cultures_cell_line_id_fkey(name, full_name, identifier, clone)").single();
   const { data: savedCulture, error } = await query;
   submit.disabled = false;
 
