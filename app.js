@@ -126,6 +126,8 @@ const els = {
   printRunSchedule: document.querySelector("#printRunSchedule"),
   printSchedule: document.querySelector("#printSchedule"),
   calendarRunCheckboxes: document.querySelector("#calendarRunCheckboxes"),
+  calendarExportDialog: document.querySelector("#calendarExportDialog"),
+  confirmCalendarExport: document.querySelector("#confirmCalendarExport"),
   eventsList: document.querySelector("#eventsList"),
   cultureCellLineCheckboxes: document.querySelector("#cultureCellLineCheckboxes"),
   vesselCultureSelect: document.querySelector("#vesselCultureSelect"),
@@ -3898,7 +3900,18 @@ function setupForms() {
   els.downloadCryoXls.addEventListener("click", () => handleCryoExport("xls"));
   els.downloadCryoPdf.addEventListener("click", () => handleCryoExport("pdf"));
   els.refreshToday.addEventListener("click", loadAll);
-  els.printAllSchedules.addEventListener("click", () => printSchedules(false));
+  els.printAllSchedules.addEventListener("click", () => {
+    renderCalendarRunFilters();
+    els.calendarExportDialog.showModal();
+  });
+  els.confirmCalendarExport.addEventListener("click", () => {
+    if (getCheckedValues(els.calendarRunCheckboxes).length === 0) {
+      showToast("Select at least one batch to export.");
+      return;
+    }
+    els.calendarExportDialog.close();
+    printSchedules(false);
+  });
   els.printRunSchedule.addEventListener("click", () => printSchedules(true));
   [els.todayDifferentiationTasks, els.runSchedule].forEach((container) => container.addEventListener("click", (event) => {
     const button = event.target.closest("[data-toggle-schedule-task]");

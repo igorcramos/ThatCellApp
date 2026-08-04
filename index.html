@@ -152,14 +152,7 @@
               <h3>Today’s differentiation tasks</h3>
               <p>Check off work to record it automatically in Activity.</p>
             </div>
-            <button class="secondary-button" id="printAllSchedules" type="button">Export monthly calendar</button>
-          </div>
-          <div class="calendar-batch-filter">
-            <div>
-              <strong>Batches included in the calendar</strong>
-              <span>Only active batches with scheduled activities are listed. Uncheck any batch you do not want to export.</span>
-            </div>
-            <div id="calendarRunCheckboxes" class="checkbox-grid calendar-run-checkboxes"></div>
+            <button class="secondary-button" id="printAllSchedules" type="button">Choose batches &amp; export</button>
           </div>
           <div id="todayDifferentiationTasks" class="today-task-list"></div>
         </div>
@@ -1487,6 +1480,23 @@
     </main>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <dialog class="calendar-export-dialog" id="calendarExportDialog" aria-labelledby="calendarExportTitle">
+      <form method="dialog">
+        <div class="calendar-export-heading">
+          <div>
+            <p class="eyebrow">Monthly calendar</p>
+            <h2 id="calendarExportTitle">Choose cultures / batches</h2>
+            <p>Only active batches with scheduled activities are shown. The legend will include only batches with activities in each month.</p>
+          </div>
+          <button class="icon-button" value="cancel" type="submit" aria-label="Close">&times;</button>
+        </div>
+        <div id="calendarRunCheckboxes" class="checkbox-grid calendar-run-checkboxes"></div>
+        <div class="form-actions calendar-export-actions">
+          <button class="secondary-button" value="cancel" type="submit">Cancel</button>
+          <button class="primary-button" id="confirmCalendarExport" value="default" type="button">Export selected</button>
+        </div>
+      </form>
+    </dialog>
     <section id="printSchedule" class="print-schedule" aria-hidden="true"></section>
 
     <script src="supabase-js.min.js?v=20260714a"></script>
@@ -1495,7 +1505,7 @@
     <script src="zxing-browser.min.js?v=0.2.0"></script>
     <script src="barcode-scanner.js?v=20260810a"></script>
     <script src="schedule-calendar.js?v=20260809a"></script>
-    <script src="app.js?v=20260809e"></script>
+    <script src="app.js?v=20260810b"></script>
     <script src="reagent-inventory.js?v=20260805b"></script>
     <script src="reagent-checklists.js?v=20260807a"></script>
     <script src="reagent-operations.js?v=20260810a"></script>
