@@ -4,7 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ThatCellApp</title>
-    <link rel="stylesheet" href="styles.css?v=20260720b">
+    <link rel="stylesheet" href="styles.css?v=20260804b">
+    <link rel="stylesheet" href="reagent-operations.css?v=20260805a">
   </head>
   <body>
     <header class="app-header">
@@ -16,52 +17,70 @@
         </div>
       </div>
       <div class="status-stack">
+        <label class="language-control" for="languageSelect">
+          <span>Language</span>
+          <select id="languageSelect" aria-label="Interface language">
+            <option value="en">English</option>
+            <option value="pt">Português</option>
+          </select>
+        </label>
+        <div class="status-pill" id="connectionStatus" role="status" aria-live="polite">Connecting</div>
+        <div class="last-updated" id="lastUpdated">Last updated: never</div>
         <div class="user-strip is-hidden" id="userStrip">
           <span id="currentUserLabel"></span>
-          <button class="secondary-button compact-button" id="signOutButton" type="button">Sign out</button>
+          <button class="text-button" id="signOutButton" type="button">Sign out</button>
         </div>
-        <div class="status-pill" id="connectionStatus">Connecting</div>
-        <div class="last-updated" id="lastUpdated">Last updated: never</div>
       </div>
     </header>
 
-    <section class="auth-panel is-hidden" id="authPanel">
-      <form class="auth-card" id="authForm">
+    <section class="auth-panel is-hidden" id="authPanel" aria-labelledby="authTitle">
+      <div class="auth-card">
         <div>
-          <h2>Sign in</h2>
-          <p>Use your lab account to access assigned projects and cultures.</p>
-          <p class="auth-guidance"><strong>No password yet?</strong> If you already entered with an email link, use “Set or reset password”. Use “Create account” only for a brand-new email.</p>
-          <p class="auth-file-warning is-hidden" id="authFileWarning">Login links do not work when this page is opened as a file. <a href="http://localhost:5173">Open the correct local address</a>.</p>
+          <p class="eyebrow">Secure lab access</p>
+          <h2 id="authTitle">Sign in without a password</h2>
+          <p>Use your work email. We will send a secure sign-in link; your session stays active on this device.</p>
         </div>
-        <label>
-          Email
-          <input name="email" type="email" autocomplete="email" required>
-        </label>
-        <label>
-          Password
-          <input name="password" type="password" autocomplete="current-password" required>
-        </label>
-        <div class="form-actions">
-          <button class="primary-button" name="mode" value="signin" type="submit">Sign in</button>
-          <button class="secondary-button" name="mode" value="signup" type="submit">Create account with this password</button>
-          <button class="secondary-button" id="magicLinkButton" type="button">Email me a login link (no password)</button>
-          <button class="secondary-button" id="resetPasswordButton" type="button">Set or reset password</button>
-        </div>
-      </form>
+        <form id="authForm" class="auth-form">
+          <label>
+            Email
+            <input name="email" type="email" autocomplete="email" inputmode="email" required placeholder="you@lab.org">
+          </label>
+          <button class="primary-button" id="magicLinkButton" type="submit">Email me a sign-in link</button>
+        </form>
+        <details class="auth-code-panel">
+          <summary>I received a one-time code</summary>
+          <form id="authOtpForm" class="auth-form auth-code-form">
+            <label>
+              Six-digit code
+              <input name="token" type="text" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="123456">
+            </label>
+            <button class="secondary-button" id="verifyOtpButton" type="submit">Verify code</button>
+          </form>
+          <p class="field-help">Enter a code only if your Supabase email template is configured to show one.</p>
+        </details>
+        <p class="auth-guidance" id="authMessage" role="status" aria-live="polite">Only approved project members can access lab records.</p>
+        <p class="auth-file-warning is-hidden" id="authFileWarning">
+          You opened a local file. Sign-in links will return to the secure published version.
+          <a href="https://igorcramos.github.io/ThatCellApp/">Open the published app now.</a>
+        </p>
+      </div>
     </section>
 
-    <nav class="tabs app-shell is-hidden" aria-label="App sections">
+    <nav class="tabs app-shell" role="tablist" aria-label="App sections">
       <button class="tab is-active" data-view="todayView" type="button">Today</button>
       <button class="tab" data-view="linesView" type="button">Cell lines</button>
       <button class="tab" data-view="culturesView" type="button">Cultures & plates</button>
       <button class="tab" data-view="cryoView" type="button">Cryostock</button>
+      <button class="tab" data-view="reagentsView" type="button">Reagents</button>
       <button class="tab" data-view="projectsView" type="button">Projects</button>
       <button class="tab" data-view="protocolsView" type="button">Protocols</button>
       <button class="tab" data-view="differentiationsView" type="button">Differentiations</button>
       <button class="tab" data-view="eventsView" type="button">Activity</button>
     </nav>
 
-    <main class="app-shell is-hidden">
+    <div class="app-shell app-issues is-hidden" id="appIssues" role="status" aria-live="polite"></div>
+
+    <main class="app-shell">
       <section class="view is-active" id="todayView">
         <div class="section-heading">
           <div>
@@ -99,6 +118,16 @@
         <div class="table-panel">
           <h3>Ongoing cultures</h3>
           <div id="activeCulturesList" class="item-list"></div>
+        </div>
+        <div class="table-panel today-tasks-panel">
+          <div class="panel-title-row">
+            <div>
+              <h3>Today’s differentiation tasks</h3>
+              <p>Check off work to record it automatically in Activity.</p>
+            </div>
+            <button class="secondary-button" id="printAllSchedules" type="button">Print schedules</button>
+          </div>
+          <div id="todayDifferentiationTasks" class="today-task-list"></div>
         </div>
       </section>
 
@@ -242,10 +271,10 @@
         </div>
         <form class="form-grid" id="cultureForm">
           <input name="id" type="hidden">
-          <label>
-            Cell line
-            <select name="cell_line_id" id="cultureCellLineSelect" required></select>
-          </label>
+          <div class="wide">
+            <div class="field-label">Cell lines in this batch</div>
+            <div class="checkbox-grid" id="cultureCellLineCheckboxes"></div>
+          </div>
           <label>
             Culture name
             <input name="culture_name" placeholder="Example: HEK293 P12 T75">
@@ -641,6 +670,16 @@
             <p>Define reusable differentiation protocols and planned tasks.</p>
           </div>
         </div>
+        <div class="protocol-import-bar">
+          <div>
+            <strong>Import a protocol</strong>
+            <span>Upload CSV or TSV columns: Protocol name, Day, Base task, Medium.</span>
+          </div>
+          <label class="secondary-button file-button">
+            Upload protocol
+            <input id="protocolImportInput" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values">
+          </label>
+        </div>
         <form class="form-grid" id="protocolForm">
           <input name="id" type="hidden">
           <label>
@@ -715,6 +754,10 @@
             Estimated duration (hours)
             <input name="estimated_duration_hours" type="number" min="0" step="0.25" placeholder="Example: 1.5">
           </label>
+          <label>
+            Medium / reagents
+            <input name="medium" placeholder="Example: Medium 2 + FGF2">
+          </label>
           <label class="wide">
             Notes
             <textarea name="notes" rows="3" placeholder="Task details, reagents, timing notes"></textarea>
@@ -783,6 +826,10 @@
             Source plate
             <select name="source_vessel_id" id="differentiationVesselSelect"></select>
           </label>
+          <div class="wide">
+            <div class="field-label">Cell lines in this differentiation batch</div>
+            <div class="checkbox-grid" id="differentiationCellLineCheckboxes"></div>
+          </div>
           <div class="wide is-hidden" id="differentiationWellsPanel">
             <div class="field-label">Source wells</div>
             <div class="checkbox-grid" id="differentiationWellCheckboxes"></div>
@@ -798,6 +845,10 @@
               <option value="discarded">Discarded</option>
             </select>
           </label>
+          <label>
+            Schedule color
+            <input name="schedule_color" type="color" value="#176f64">
+          </label>
           <label class="wide">
             Notes
             <textarea name="notes" rows="3" placeholder="Run notes"></textarea>
@@ -811,6 +862,243 @@
           <h3>Differentiation runs</h3>
           <div id="differentiationRunsList" class="item-list"></div>
         </div>
+        <div class="table-panel schedule-panel">
+          <div class="panel-title-row">
+            <div>
+              <h3>Run schedule</h3>
+              <p>Protocol tasks, automatic medium changes, and recorded collections in one timeline.</p>
+            </div>
+            <div class="filter-row">
+              <select id="scheduleRunSelect" aria-label="Choose a differentiation run"></select>
+              <button class="secondary-button" id="printRunSchedule" type="button">Print schedule</button>
+            </div>
+          </div>
+          <div id="runSchedule" class="run-schedule"></div>
+        </div>
+        <form class="form-grid" id="collectionForm">
+          <label>
+            Differentiation run
+            <select name="differentiation_run_id" id="collectionRunSelect" required></select>
+          </label>
+          <label>
+            Collection date
+            <input name="event_date" id="collectionDate" type="date" required>
+          </label>
+          <label>
+            Protocol day
+            <input name="event_day" id="collectionDay" type="number" step="1" required>
+          </label>
+          <label>
+            Quantity
+            <input name="quantity" placeholder="Example: 3 organoids">
+          </label>
+          <label>
+            Experiment / destination
+            <input name="experiment" placeholder="Example: RNA-seq, fixation">
+          </label>
+          <label class="wide">
+            Collection notes
+            <textarea name="notes" rows="3" placeholder="Sample IDs, conditions, storage, or other details"></textarea>
+          </label>
+          <div class="form-actions wide">
+            <button class="primary-button" type="submit">Add collection</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="view" id="reagentsView">
+        <div class="section-heading">
+          <div>
+            <h2>Reagent inventory</h2>
+            <p>Find culture reagents by name or catalog number, then track stock, reconstitution, and aliquots.</p>
+          </div>
+          <button class="secondary-button" id="refreshReagents" type="button">Refresh</button>
+        </div>
+
+        <div class="reagent-operations-grid">
+          <section class="table-panel reagent-operation-card" aria-labelledby="reagentScannerTitle">
+            <div>
+              <h3 id="reagentScannerTitle">Scan a product or container</h3>
+              <p class="panel-subtitle">Use the camera, an image, or enter the barcode/QR value.</p>
+            </div>
+            <div class="barcode-input-row">
+              <input id="reagentBarcodeInput" autocomplete="off" placeholder="Barcode, GTIN, catalog, or QR value" aria-label="Barcode or QR value">
+              <button class="primary-button" id="reagentBarcodeLookup" type="button">Find</button>
+            </div>
+            <div class="form-actions">
+              <button class="secondary-button" id="startReagentScanner" type="button">Use camera</button>
+              <label class="secondary-button file-button">
+                Scan image
+                <input id="reagentBarcodeImage" type="file" accept="image/*">
+              </label>
+            </div>
+            <div class="scanner-stage is-hidden" id="reagentScannerStage">
+              <video id="reagentScannerVideo" muted playsinline aria-label="Barcode camera preview"></video>
+              <button class="secondary-button" id="stopReagentScanner" type="button">Stop camera</button>
+            </div>
+            <p class="field-help" id="reagentScannerStatus" role="status" aria-live="polite">Camera scanning needs HTTPS or localhost and browser permission. Manual entry always works.</p>
+          </section>
+
+          <section class="table-panel reagent-operation-card" aria-labelledby="reagentAlertsTitle">
+            <div class="panel-title-row">
+              <div><h3 id="reagentAlertsTitle">Stock alerts</h3><p class="panel-subtitle">Expiration and reorder checks.</p></div>
+              <label class="compact-field">Warn within <input id="reagentExpiryWarningDays" type="number" min="1" max="365" value="30"> days</label>
+            </div>
+            <div class="reagent-metrics" id="reagentAlertMetrics"></div>
+            <div class="compact-list" id="reagentAlertsList"></div>
+          </section>
+
+          <section class="table-panel reagent-operation-card" aria-labelledby="reagentQualityTitle">
+            <div><h3 id="reagentQualityTitle">Data quality</h3><p class="panel-subtitle">Duplicates, invalid fields, and missing stock details.</p></div>
+            <div class="reagent-metrics" id="reagentQualityMetrics"></div>
+            <div class="compact-list" id="reagentQualityList"></div>
+          </section>
+        </div>
+
+        <form class="form-grid" id="reagentItemForm">
+          <input name="id" type="hidden">
+          <input name="catalog_reagent_id" type="hidden">
+          <label class="wide reagent-library-field">
+            Reagent library
+            <input id="reagentLibrarySearch" autocomplete="off" placeholder="Type part of a name or catalog number" required>
+            <span class="field-help">Select a result below. The starter library can be extended in Supabase.</span>
+            <div id="reagentLibraryResults" class="reagent-library-results" role="listbox"></div>
+          </label>
+          <label>
+            Lot number
+            <input name="lot_number" placeholder="Example: 1234567">
+          </label>
+          <label>
+            Container barcode / QR
+            <input name="container_barcode" autocomplete="off" placeholder="Scan or type the label value">
+          </label>
+          <label>
+            Expiration date
+            <input name="expiration_date" type="date">
+          </label>
+          <label>
+            Opened on
+            <input name="opened_at" type="date">
+          </label>
+          <label>
+            Quantity available
+            <input name="quantity" type="number" min="0" step="any" required>
+          </label>
+          <label>
+            Reorder at or below
+            <input name="minimum_quantity" type="number" min="0" step="any" value="0">
+          </label>
+          <label>
+            Unit
+            <select name="unit" required>
+              <option value="mL">mL</option><option value="µL">µL</option><option value="L">L</option>
+              <option value="g">g</option><option value="mg">mg</option><option value="µg">µg</option>
+              <option value="units">units</option><option value="vials">vials</option><option value="bottles">bottles</option>
+            </select>
+          </label>
+          <label>
+            Location
+            <input name="location" required placeholder="Example: -20 °C / Rack A / Box 2">
+          </label>
+          <label>
+            Status
+            <select name="status"><option value="available">Available</option><option value="low">Low stock</option><option value="depleted">Depleted</option><option value="expired">Expired</option><option value="quarantined">Quarantined</option></select>
+          </label>
+          <fieldset class="wide form-section">
+            <legend>Reconstitution (optional)</legend>
+            <div class="conditional-grid">
+              <label>Reconstituted on<input name="reconstituted_at" type="date"></label>
+              <label>Solvent<input name="reconstitution_solvent" placeholder="Example: sterile water"></label>
+              <label>Final concentration<input name="reconstitution_concentration" type="number" min="0" step="any"></label>
+              <label>Concentration unit<input name="reconstitution_concentration_unit" placeholder="Example: mg/mL, 100×"></label>
+              <label class="wide">Instructions / notes<textarea name="reconstitution_notes" rows="2"></textarea></label>
+            </div>
+          </fieldset>
+          <label class="wide">Notes<textarea name="notes" rows="2"></textarea></label>
+          <div class="form-actions wide">
+            <button class="primary-button" id="reagentItemSubmitButton" type="submit">Add to inventory</button>
+            <button class="secondary-button is-hidden" id="cancelReagentEdit" type="button">Cancel edit</button>
+          </div>
+        </form>
+
+        <div class="table-panel">
+          <div class="panel-title-row">
+            <div><h3>Current stock</h3><p class="panel-subtitle">Open an item to manage its aliquots.</p></div>
+            <input id="reagentInventorySearch" type="search" placeholder="Filter stock" aria-label="Filter reagent stock">
+          </div>
+          <div id="reagentInventoryList" class="item-list"></div>
+        </div>
+
+        <details class="table-panel reagent-disclosure" id="reagentCatalogTools">
+          <summary><span><strong>Catalog library</strong><small>Add one product manually or import a verified supplier CSV.</small></span></summary>
+          <div class="reagent-tools-layout">
+            <form class="form-grid" id="reagentCatalogForm">
+              <div class="wide"><h3>Add a catalog product</h3></div>
+              <label>Product name<input name="name" required></label>
+              <label>Catalog number<input name="catalog_number" required></label>
+              <label>Manufacturer / supplier<input name="manufacturer" required></label>
+              <label>Category<input name="category" placeholder="Example: Growth factor"></label>
+              <label>Default storage<input name="default_storage" placeholder="Example: -20 °C"></label>
+              <label>Product barcode<input name="barcode" autocomplete="off"></label>
+              <label>GTIN<input name="gtin" inputmode="numeric" autocomplete="off" placeholder="8, 12, 13, or 14 digits"></label>
+              <label>Supplier URL<input name="supplier_url" type="url" placeholder="https://..."></label>
+              <label class="wide">Synonyms<input name="synonyms" placeholder="Separate names with semicolons"></label>
+              <label class="wide">Notes<textarea name="notes" rows="2"></textarea></label>
+              <div class="form-actions wide"><button class="primary-button" type="submit">Add to library</button></div>
+              <p class="form-message wide is-hidden" id="reagentCatalogFormMessage" role="alert"></p>
+            </form>
+
+            <section class="import-card" aria-labelledby="reagentImportTitle">
+              <div><h3 id="reagentImportTitle">Import catalog CSV</h3><p>Review supplier metadata before importing. Existing manufacturer + catalog pairs are updated.</p></div>
+              <label class="secondary-button file-button">
+                Choose CSV
+                <input id="reagentCatalogCsv" type="file" accept=".csv,text/csv">
+              </label>
+              <a class="secondary-button" href="docs/reagent-catalog-template.csv" download>Download template</a>
+              <div id="reagentImportPreview" class="compact-list"></div>
+              <button class="primary-button is-hidden" id="reagentImportConfirm" type="button">Import valid rows</button>
+              <p class="field-help" id="reagentImportStatus" role="status" aria-live="polite"></p>
+            </section>
+          </div>
+        </details>
+
+        <details class="table-panel reagent-disclosure" id="reagentPurchasingTools">
+          <summary><span><strong>Requests &amp; purchasing</strong><small>Request, review, order, and receive materials into stock.</small></span></summary>
+          <div class="reagent-tools-layout">
+            <form class="form-grid" id="reagentPurchaseRequestForm">
+              <div class="wide"><h3>New request</h3></div>
+              <label class="wide">Catalog product<select name="catalog_reagent_id" id="reagentPurchaseCatalog" required></select></label>
+              <label>Quantity<input name="requested_quantity" type="number" min="0" step="any" required></label>
+              <label>Unit<input name="unit" required placeholder="bottles, vials, mL…"></label>
+              <label>Requested by<input name="requester_name" required autocomplete="name"></label>
+              <label>Vendor<input name="vendor"></label>
+              <label>Estimated cost<input name="estimated_cost" type="number" min="0" step="0.01"></label>
+              <label>Currency<select name="currency"><option>USD</option><option>BRL</option><option>EUR</option><option>GBP</option></select></label>
+              <label>Priority<select name="priority"><option value="normal">Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></label>
+              <label class="wide">Justification<textarea name="justification" rows="2"></textarea></label>
+              <div class="form-actions wide"><button class="primary-button" type="submit">Submit request</button></div>
+            </form>
+            <section>
+              <div class="panel-title-row"><div><h3>Purchase queue</h3><p class="panel-subtitle">Available actions follow the current status.</p></div><select id="reagentPurchaseStatusFilter" aria-label="Filter purchase requests"><option value="">All statuses</option><option value="requested">Requested</option><option value="approved">Approved</option><option value="ordered">Ordered</option><option value="received">Received</option><option value="rejected">Rejected</option><option value="cancelled">Cancelled</option></select></div>
+              <div class="item-list" id="reagentPurchaseList"></div>
+            </section>
+          </div>
+        </details>
+
+        <form class="form-grid is-hidden" id="aliquotForm">
+          <input name="inventory_item_id" type="hidden">
+          <div class="wide"><h3 id="aliquotFormTitle">Add aliquot</h3></div>
+          <label>Aliquot label<input name="label" required placeholder="Example: A01"></label>
+          <label>Quantity<input name="quantity" type="number" min="0" step="any" required></label>
+          <label>Unit<input name="unit" required placeholder="Example: µL"></label>
+          <label>Location<input name="location" required placeholder="Example: -80 °C / Box 4"></label>
+          <label>Prepared on<input name="prepared_at" type="date"></label>
+          <label>Expiration date<input name="expiration_date" type="date"></label>
+          <label>Status<select name="status"><option value="available">Available</option><option value="used">Used</option><option value="discarded">Discarded</option></select></label>
+          <label class="wide">Notes<textarea name="notes" rows="2"></textarea></label>
+          <div class="form-actions wide"><button class="primary-button" type="submit">Save aliquot</button><button class="secondary-button" id="closeAliquotForm" type="button">Close</button></div>
+          <div id="aliquotList" class="item-list wide"></div>
+        </form>
       </section>
 
       <section class="view" id="eventsView">
@@ -911,9 +1199,13 @@
     </main>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <section id="printSchedule" class="print-schedule" aria-hidden="true"></section>
 
     <script src="supabase-js.min.js?v=20260714a"></script>
     <script src="supabase-local.js?v=20260714a"></script>
-    <script src="app.js?v=20260720c"></script>
+    <script src="i18n.js?v=20260804c"></script>
+    <script src="app.js?v=20260804c"></script>
+    <script src="reagent-inventory.js?v=20260805b"></script>
+    <script src="reagent-operations.js?v=20260805b"></script>
   </body>
 </html>

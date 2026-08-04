@@ -1,0 +1,3 @@
+name,catalog_number,manufacturer,category,default_storage,barcode,gtin,synonyms,supplier_url,notes
+Example recombinant growth factor,GF-001,Example Supplier,Growth factor,-20 °C,,,"GF example|example factor",https://example.com/product,Replace this example with verified supplier metadata
+Example basal medium,MED-100,Example Supplier,Basal medium,2–8 °C,,,"Example medium|EM100",https://example.com/product-2,

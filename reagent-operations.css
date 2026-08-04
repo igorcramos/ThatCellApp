@@ -1,0 +1,273 @@
+.reagent-operations-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.reagent-operation-card {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  margin-bottom: 0;
+  box-shadow: none;
+}
+
+.reagent-operation-card h3,
+.import-card h3,
+.reagent-tools-layout h3 {
+  margin-bottom: 4px;
+}
+
+.panel-subtitle,
+.import-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.barcode-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.scanner-stage {
+  display: grid;
+  gap: 8px;
+}
+
+.scanner-stage video {
+  width: 100%;
+  max-height: 260px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #101512;
+  object-fit: cover;
+}
+
+.compact-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.compact-field input {
+  width: 68px;
+  min-height: 34px;
+  padding: 5px 7px;
+}
+
+.reagent-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.reagent-mini-metric {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-muted);
+}
+
+.reagent-mini-metric strong {
+  font-size: 1.3rem;
+}
+
+.reagent-mini-metric span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.reagent-mini-metric.is-warning {
+  border-color: #ead0a5;
+  background: #fff8ec;
+}
+
+.reagent-mini-metric.is-danger {
+  border-color: #e5bbbb;
+  background: #fff2f2;
+}
+
+.compact-list {
+  display: grid;
+  gap: 7px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.compact-alert {
+  display: grid;
+  gap: 2px;
+  padding: 9px 10px;
+  border-left: 3px solid var(--warning);
+  border-radius: 6px;
+  background: #fff8ec;
+  font-size: 0.8rem;
+}
+
+.compact-alert.is-danger {
+  border-left-color: var(--danger);
+  background: #fff2f2;
+}
+
+.compact-alert.is-info {
+  border-left-color: var(--blue);
+  background: #f2f6fb;
+}
+
+.compact-alert span {
+  color: var(--muted);
+}
+
+.reagent-disclosure {
+  padding: 0;
+  overflow: hidden;
+}
+
+.reagent-disclosure > summary {
+  display: flex;
+  align-items: center;
+  min-height: 64px;
+  padding: 14px 18px;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.reagent-disclosure > summary span {
+  display: inline-grid;
+  gap: 3px;
+  margin-left: 8px;
+}
+
+.reagent-disclosure > summary small {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.reagent-disclosure[open] > summary {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+.reagent-tools-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+  gap: 18px;
+  padding: 18px;
+}
+
+.reagent-tools-layout > .form-grid {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+.import-card {
+  display: flex;
+  align-content: flex-start;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.import-card > div,
+.import-card > p {
+  width: 100%;
+}
+
+.import-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 0.8rem;
+}
+
+.import-row.is-invalid {
+  color: var(--danger);
+  background: #fff2f2;
+}
+
+.form-message {
+  margin: 0;
+  padding: 10px;
+  border-radius: 6px;
+  color: var(--danger);
+  background: #fff2f2;
+  font-size: 0.84rem;
+}
+
+.purchase-actions,
+.receipt-fields {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.purchase-actions input,
+.receipt-fields input {
+  min-height: 38px;
+}
+
+.receipt-fields label {
+  flex: 1 1 135px;
+}
+
+.purchase-action-button {
+  min-height: 38px;
+}
+
+.purchase-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+@media (max-width: 980px) {
+  .reagent-operations-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .reagent-operation-card:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .reagent-tools-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .reagent-operations-grid,
+  .reagent-metrics,
+  .barcode-input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .reagent-operation-card:first-child {
+    grid-column: auto;
+  }
+
+  .reagent-tools-layout {
+    padding: 14px;
+  }
+}

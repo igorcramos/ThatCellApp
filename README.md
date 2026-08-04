@@ -7,8 +7,10 @@ Simple web app for cell culture tracking using Supabase.
 1. Create a Supabase project.
 2. Open the SQL Editor.
 3. Run `supabase/schema.sql`.
-4. Run `supabase/2026-06-29_auth_collaboration.sql` to enable login, roles, and collaborator access.
-5. Confirm that these tables were created:
+4. Run the dated feature migrations needed by the app through `supabase/2026-08-03_task_completion_and_print.sql`, in date order. The older `2026-06-29_auth_collaboration.sql`, `2026-07-20_claim_existing_data.sql`, and `2026-08-03_remove_login.sql` files are historical transitions and are not part of a new secure installation.
+5. Run `supabase/2026-08-04_reagent_inventory.sql` to add the searchable reagent library, inventory, reconstitution, and aliquots.
+6. Run `supabase/2026-08-05_reagent_operations.sql` for barcodes, alerts, catalog expansion, and purchase requests.
+7. Confirm that these tables were created:
    - `cell_lines`
    - `cultures`
    - `culture_events`
@@ -17,20 +19,20 @@ Simple web app for cell culture tracking using Supabase.
    - `profiles`
    - `project_members`
    - `culture_members`
-6. Confirm that the `culture-photos` bucket exists in Storage.
-7. Create your account in the app, then make yourself admin in the SQL Editor:
-
-```sql
-update public.profiles
-set role = 'admin'
-where email = 'your-email@example.com';
-```
-
-8. In Supabase Auth settings, choose whether sign-ups should stay open or whether you prefer inviting/creating users yourself.
+   - `reagent_catalog`
+   - `reagent_inventory_items`
+   - `reagent_aliquots`
+   - `reagent_purchase_requests`
+8. Confirm that the `culture-photos` bucket exists in Storage.
+9. When redirects and the first administrator email are ready, follow
+    `docs/passwordless-auth-rollout.md` and run
+    `supabase/2026-08-06_secure_passwordless_auth.sql` last.
 
 ## Login options
 
-The app supports email/password accounts created in Supabase Auth. If you do not already have a user there, use **Create account** in the app or create/invite a user from the Supabase Dashboard.
+The secure mode uses Supabase email magic links or optional one-time codes. The
+app does not request or store passwords. Sessions persist on the current device,
+and new users remain pending until an administrator assigns project access.
 
 ## How to open locally
 
@@ -54,7 +56,7 @@ The `main` branch is deployed automatically with GitHub Pages:
 https://igorcramos.github.io/ThatCellApp/
 ```
 
-Supabase Auth must allow this exact production URL for email confirmations, magic links, and password recovery. Keep `http://localhost:5173/**` as an additional redirect URL for local development.
+Supabase Auth must allow this exact production URL for magic links. Keep `http://localhost:5173/**` as an additional redirect URL for local development.
 
 ## What this first version does
 
@@ -63,14 +65,28 @@ Supabase Auth must allow this exact production URL for email confirmations, magi
 - Creates physical vessels and multiwell plate maps.
 - Maps project-linked cryogenic boxes and vial positions in -80 storage.
 - Saves differentiation protocol templates and starts differentiation runs.
+- Imports CSV/TSV protocols, clones them for adaptation, generates run schedules, and records collections.
 - Records events in the history.
 - Allows optional photos in events.
 - Shows a quick overview of active cultures.
+- Tracks culture-reagent lots, barcodes/QR codes, alerts, catalog CSV imports, and purchase requests through receipt.
 
 ## Security note
 
-The initial schema was prototype mode. For shared use, run `supabase/2026-06-29_auth_collaboration.sql`; it removes public read/write policies, requires login, and lets admins assign multiple users to each project or culture.
+The historical schema used prototype public access. For shared use, follow
+`docs/passwordless-auth-rollout.md`. The final security migration replaces all
+prototype policies with passwordless login, active-member/project RLS, private
+photos, and an administrator-only audit trail. Never rerun
+`supabase/2026-08-03_remove_login.sql` after secure mode is active.
 
 ## Changing table columns
 
 See `docs/schema-changes.md` for the recommended workflow and SQL examples.
+
+## Interface language
+
+Use the language selector in the header to switch between English and Brazilian
+Portuguese. The preference is stored in the browser and applies to navigation,
+forms, authentication, inventory, scanning, alerts, purchasing, dates, and
+dynamic status messages. Laboratory product names, user-entered data, catalog
+identifiers, and database error details remain in their original form.

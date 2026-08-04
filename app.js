@@ -1,6 +1,7 @@
 const SUPABASE_URL = "https://rqvpzurlaxlopmhxivcn.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJxdnB6dXJsYXhsb3BtaHhpdmNuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3NzU3NzgsImV4cCI6MjA5NjM1MTc3OH0.ylM3vX5hHKMmT_nkc4_FifCkpePUQyRm4TPx6MwCKBo";
 const PHOTO_BUCKET = "culture-photos";
+const PUBLISHED_APP_URL = "https://igorcramos.github.io/ThatCellApp/";
 
 const supabaseClient = window.supabase || (typeof supabase !== "undefined" ? supabase : null);
 const db = supabaseClient?.createClient?.(SUPABASE_URL, SUPABASE_ANON_KEY) || null;
@@ -8,7 +9,7 @@ const db = supabaseClient?.createClient?.(SUPABASE_URL, SUPABASE_ANON_KEY) || nu
 const state = {
   session: null,
   user: null,
-  authAvailable: true,
+  authAvailable: false,
   profile: null,
   profiles: [],
   projectMembers: [],
@@ -16,6 +17,7 @@ const state = {
   projects: [],
   cellLines: [],
   cultures: [],
+  cultureCellLines: [],
   events: [],
   vessels: [],
   vesselWells: [],
@@ -25,8 +27,10 @@ const state = {
   differentiationProtocols: [],
   protocolTasks: [],
   differentiationRuns: [],
+  differentiationRunCellLines: [],
   differentiationRunWells: [],
   differentiationEvents: [],
+  signedPhotoUrls: new Map(),
   selectedVesselId: null,
   selectedWells: new Set(),
   selectedCryoBoxId: null,
@@ -66,20 +70,24 @@ const projectColors = {
 const els = {
   authPanel: document.querySelector("#authPanel"),
   authForm: document.querySelector("#authForm"),
+  authOtpForm: document.querySelector("#authOtpForm"),
+  authMessage: document.querySelector("#authMessage"),
   authFileWarning: document.querySelector("#authFileWarning"),
   magicLinkButton: document.querySelector("#magicLinkButton"),
-  resetPasswordButton: document.querySelector("#resetPasswordButton"),
+  verifyOtpButton: document.querySelector("#verifyOtpButton"),
   userStrip: document.querySelector("#userStrip"),
   currentUserLabel: document.querySelector("#currentUserLabel"),
   signOutButton: document.querySelector("#signOutButton"),
   connectionStatus: document.querySelector("#connectionStatus"),
   lastUpdated: document.querySelector("#lastUpdated"),
+  appIssues: document.querySelector("#appIssues"),
   cellLineForm: document.querySelector("#cellLineForm"),
   cultureForm: document.querySelector("#cultureForm"),
   vesselForm: document.querySelector("#vesselForm"),
   protocolForm: document.querySelector("#protocolForm"),
   protocolTaskForm: document.querySelector("#protocolTaskForm"),
   differentiationRunForm: document.querySelector("#differentiationRunForm"),
+  collectionForm: document.querySelector("#collectionForm"),
   eventForm: document.querySelector("#eventForm"),
   cellLinesList: document.querySelector("#cellLinesList"),
   culturesList: document.querySelector("#culturesList"),
@@ -87,10 +95,20 @@ const els = {
   protocolsList: document.querySelector("#protocolsList"),
   protocolTasksList: document.querySelector("#protocolTasksList"),
   differentiationRunsList: document.querySelector("#differentiationRunsList"),
+  protocolImportInput: document.querySelector("#protocolImportInput"),
+  scheduleRunSelect: document.querySelector("#scheduleRunSelect"),
+  collectionRunSelect: document.querySelector("#collectionRunSelect"),
+  collectionDate: document.querySelector("#collectionDate"),
+  collectionDay: document.querySelector("#collectionDay"),
+  runSchedule: document.querySelector("#runSchedule"),
   projectsList: document.querySelector("#projectsList"),
   activeCulturesList: document.querySelector("#activeCulturesList"),
+  todayDifferentiationTasks: document.querySelector("#todayDifferentiationTasks"),
+  printAllSchedules: document.querySelector("#printAllSchedules"),
+  printRunSchedule: document.querySelector("#printRunSchedule"),
+  printSchedule: document.querySelector("#printSchedule"),
   eventsList: document.querySelector("#eventsList"),
-  cultureCellLineSelect: document.querySelector("#cultureCellLineSelect"),
+  cultureCellLineCheckboxes: document.querySelector("#cultureCellLineCheckboxes"),
   vesselCultureSelect: document.querySelector("#vesselCultureSelect"),
   vesselCultureCheckboxes: document.querySelector("#vesselCultureCheckboxes"),
   wellCellLineSelect: document.querySelector("#wellCellLineSelect"),
@@ -128,6 +146,7 @@ const els = {
   differentiationVesselSelect: document.querySelector("#differentiationVesselSelect"),
   differentiationWellsPanel: document.querySelector("#differentiationWellsPanel"),
   differentiationWellCheckboxes: document.querySelector("#differentiationWellCheckboxes"),
+  differentiationCellLineCheckboxes: document.querySelector("#differentiationCellLineCheckboxes"),
   differentiationEventDate: document.querySelector("#differentiationEventDate"),
   activityTargetTypeSelect: document.querySelector("#activityTargetTypeSelect"),
   eventCulturesPanel: document.querySelector("#eventCulturesPanel"),
@@ -212,6 +231,24 @@ function numberOrNull(value) {
 
 function todayValue() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function addDays(dateValue, days) {
+  const date = new Date(`${dateValue}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + Number(days || 0));
+  return date.toISOString().slice(0, 10);
+}
+
+function protocolDayForDate(dayZeroDate, dateValue) {
+  if (!dayZeroDate || !dateValue) return null;
+  return Math.round((new Date(`${dateValue}T12:00:00Z`) - new Date(`${dayZeroDate}T12:00:00Z`)) / 86400000);
+}
+
+function dateValueString(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value.slice(0, 10);
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
 }
 
 function composedCellLineName(identifier, clone) {
@@ -407,6 +444,28 @@ function setLoadIssue(message) {
   console.error(message);
 }
 
+function showLoadIssues(issues = []) {
+  if (!els.appIssues) return;
+  const uniqueIssues = [...new Set(issues.filter(Boolean))];
+  els.appIssues.classList.toggle("is-hidden", uniqueIssues.length === 0);
+  els.appIssues.innerHTML = uniqueIssues.length
+    ? `<strong>Some sections could not be loaded.</strong><ul>${uniqueIssues.map((issue) => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>`
+    : "";
+}
+
+async function moduleRequest(label, request) {
+  try {
+    const result = await withTimeout(Promise.resolve(request), 15000, `${label} request timed out.`);
+    return { ...(result || {}), moduleLabel: label };
+  } catch (error) {
+    return { data: null, error, moduleLabel: label };
+  }
+}
+
+function loadIssueFor(result) {
+  return result?.error ? `${result.moduleLabel}: ${result.error.message || "Unknown error"}` : null;
+}
+
 function ensureDb() {
   if (db) return true;
   setStatus("error", "Offline");
@@ -435,7 +494,7 @@ function escapeHtml(value) {
 function formatDate(value) {
   if (!value) return "No date";
   const date = new Date(`${value}T00:00:00`);
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat(window.getAppLocale?.() || "en-US", {
     month: "short",
     day: "2-digit",
     year: "numeric",
@@ -444,7 +503,7 @@ function formatDate(value) {
 
 function formatDateTime(value) {
   if (!value) return "No date";
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat(window.getAppLocale?.() || "en-US", {
     month: "short",
     day: "2-digit",
     year: "numeric",
@@ -471,8 +530,30 @@ function formatEstimatedCompletion(dayZeroDate, taskDay, durationHours) {
 
 function cultureDisplayName(culture) {
   if (!culture) return "Culture";
-  const lineName = preferredCellLineName(culture.cell_lines) || "Cell line";
+  const lineName = cellLinesForCulture(culture.id).map(cellLineDisplayName).join(" + ") || preferredCellLineName(culture.cell_lines) || "Cell line";
   return culture.culture_name || `${lineName}${culture.passage_number !== null ? ` P${culture.passage_number}` : ""}`;
+}
+
+function cellLineIdsForCulture(cultureId) {
+  const culture = state.cultures.find((item) => item.id === cultureId);
+  return uniqueValues([
+    ...state.cultureCellLines.filter((link) => link.culture_id === cultureId).map((link) => link.cell_line_id),
+    culture?.cell_line_id,
+  ]);
+}
+
+function cellLinesForCulture(cultureId) {
+  return cellLineIdsForCulture(cultureId)
+    .map((id) => state.cellLines.find((line) => line.id === id))
+    .filter(Boolean);
+}
+
+function cellLineIdsForRun(runId) {
+  const run = state.differentiationRuns.find((item) => item.id === runId);
+  return uniqueValues([
+    ...state.differentiationRunCellLines.filter((link) => link.differentiation_run_id === runId).map((link) => link.cell_line_id),
+    ...(run?.source_culture_id ? cellLineIdsForCulture(run.source_culture_id) : []),
+  ]);
 }
 
 function cellLineDisplayName(line) {
@@ -866,10 +947,11 @@ function basePlateName(culture, fallbackCellLineId) {
 }
 
 function suggestedCultureName() {
-  const cellLineId = els.cultureForm.elements.cell_line_id.value;
-  const line = state.cellLines.find((item) => item.id === cellLineId);
+  const selectedLines = getCheckedValues(els.cultureCellLineCheckboxes)
+    .map((id) => state.cellLines.find((item) => item.id === id))
+    .filter(Boolean);
   const date = els.cultureForm.elements.start_date.value || todayValue();
-  return [line ? cellLineDisplayName(line) : "Culture", formatDate(date)].join(" - ");
+  return [selectedLines.length ? selectedLines.map(cellLineDisplayName).join(" + ") : "Culture batch", formatDate(date)].join(" - ");
 }
 
 function syncCultureNameSuggestion(force = false) {
@@ -1081,12 +1163,17 @@ function computeDifferentiationEventDay(runId, eventDate) {
 }
 
 function renderOptions() {
+  const selectedScheduleRun = els.scheduleRunSelect?.value;
+  const selectedCollectionRun = els.collectionRunSelect?.value;
   const lineOptions = state.cellLines
     .map((line) => `<option value="${line.id}">${escapeHtml(cellLineDisplayName(line))}</option>`)
     .join("");
 
-  els.cultureCellLineSelect.innerHTML = lineOptions || '<option value="">Add a cell line first</option>';
-  els.cultureCellLineSelect.disabled = state.cellLines.length === 0;
+  const lineCheckboxes = state.cellLines.length
+    ? state.cellLines.map((line) => `<label class="checkbox-label"><input type="checkbox" value="${line.id}">${escapeHtml(cellLineDisplayName(line))}</label>`).join("")
+    : '<div class="empty-state">Add a cell line first.</div>';
+  els.cultureCellLineCheckboxes.innerHTML = lineCheckboxes;
+  els.differentiationCellLineCheckboxes.innerHTML = lineCheckboxes;
   els.wellCellLineSelect.innerHTML = [
     '<option value="">Not specified</option>',
     lineOptions,
@@ -1189,6 +1276,16 @@ function renderOptions() {
   els.differentiationProtocolSelect.disabled = state.differentiationProtocols.length === 0;
   els.taskProtocolSelect.innerHTML = protocolOptions || '<option value="">Save a protocol first</option>';
   els.taskProtocolSelect.disabled = state.differentiationProtocols.length === 0;
+
+  const runOptions = state.differentiationRuns
+    .map((run) => `<option value="${run.id}">${escapeHtml(differentiationRunLabel(run))}</option>`)
+    .join("");
+  els.scheduleRunSelect.innerHTML = runOptions || '<option value="">Start a differentiation first</option>';
+  els.collectionRunSelect.innerHTML = runOptions || '<option value="">Start a differentiation first</option>';
+  els.scheduleRunSelect.disabled = state.differentiationRuns.length === 0;
+  els.collectionRunSelect.disabled = state.differentiationRuns.length === 0;
+  if (state.differentiationRuns.some((run) => run.id === selectedScheduleRun)) els.scheduleRunSelect.value = selectedScheduleRun;
+  if (state.differentiationRuns.some((run) => run.id === selectedCollectionRun)) els.collectionRunSelect.value = selectedCollectionRun;
 
   renderDifferentiationWellCheckboxes();
   syncCultureNameSuggestion();
@@ -1427,6 +1524,7 @@ function renderDifferentiationProtocols() {
           </div>
           <div class="item-actions">
             <span class="badge">Protocol</span>
+            <button class="secondary-button compact-button" data-clone-protocol="${protocol.id}" type="button">Clone & adapt</button>
             <button class="icon-button edit-button" data-edit-protocol="${protocol.id}" type="button" title="Edit protocol" aria-label="Edit protocol">&#9998;</button>
             <button class="icon-button danger-button" data-delete-protocol="${protocol.id}" type="button" title="Delete protocol" aria-label="Delete protocol">&#128465;</button>
           </div>
@@ -1467,6 +1565,7 @@ function renderProtocolTasks() {
               ${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
             </div>
             ${task.notes ? `<p class="event-notes">${escapeHtml(task.notes)}</p>` : ""}
+            ${task.medium ? `<p class="task-medium"><strong>Medium:</strong> ${escapeHtml(task.medium)}</p>` : ""}
           </div>
           <div class="item-actions">
             <button class="icon-button edit-button" data-edit-protocol-task="${task.id}" type="button" title="Edit task" aria-label="Edit task">&#9998;</button>
@@ -1491,6 +1590,7 @@ function renderDifferentiationRuns() {
       const meta = [
         projectForDifferentiationRun(run),
         protocol?.name,
+        `Cell lines: ${cellLineIdsForRun(run.id).map((id) => state.cellLines.find((line) => line.id === id)).filter(Boolean).map(cellLineDisplayName).join(", ") || "Not specified"}`,
         differentiationSourceLabel(run),
         run.day_zero_date ? `Day 0: ${formatDate(run.day_zero_date)}` : null,
         currentDay !== null ? `D${currentDay}` : null,
@@ -1526,6 +1626,104 @@ function renderDifferentiationRuns() {
       `;
     })
     .join("");
+}
+
+function automaticMediumForDay(day) {
+  if (day >= 31) return "Medium 2 (maintenance)";
+  if (day >= 24) return "Medium 3";
+  if (day >= 17) return "Medium 2 + FGF2 + EGF";
+  if (day >= 10) return "Medium 2 + FGF2";
+  if (day >= 3) return "Medium 1";
+  return null;
+}
+
+function buildRunSchedule(run) {
+  const tasks = state.protocolTasks
+    .filter((task) => task.protocol_id === run.protocol_id)
+    .map((task) => ({ ...task, kind: "task", date: addDays(run.day_zero_date, task.task_day) }));
+  const taskDays = new Set(tasks.map((task) => task.task_day));
+  const duration = state.differentiationProtocols.find((protocol) => protocol.id === run.protocol_id)?.expected_duration_days ?? 90;
+  const automaticChanges = [];
+  let lastChangeDay = null;
+  for (let day = 3; day <= duration; day += 1) {
+    const date = addDays(run.day_zero_date, day);
+    const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+    const isPreferredDay = [1, 3, 5].includes(weekday);
+    const mustChange = lastChangeDay !== null && day - lastChangeDay >= 3;
+    if (!taskDays.has(day) && (isPreferredDay || mustChange)) {
+      automaticChanges.push({ kind: "automatic", task_day: day, date, title: day >= 31 ? "Maintenance medium change" : "Medium change", medium: automaticMediumForDay(day) });
+      lastChangeDay = day;
+    }
+    if (taskDays.has(day)) lastChangeDay = day;
+  }
+  const collections = state.differentiationEvents
+    .filter((event) => event.differentiation_run_id === run.id && event.event_type === "Collection")
+    .map((event) => ({ ...event, kind: "collection", task_day: event.event_day ?? protocolDayForDate(run.day_zero_date, event.event_date), date: dateValueString(event.event_date), title: event.experiment || "Collection" }));
+  return [...tasks, ...automaticChanges, ...collections].sort((a, b) => dateValueString(a.date).localeCompare(dateValueString(b.date)) || (a.kind === "collection" ? 1 : -1));
+}
+
+function completionEventForItem(run, item) {
+  return state.differentiationEvents.find((event) => {
+    if (event.differentiation_run_id !== run.id) return false;
+    if (item.kind === "task" && item.id) return event.protocol_task_id === item.id;
+    if (item.kind === "automatic") return event.event_day === item.task_day && event.event_type === "Media change" && event.scheduled_title === item.title;
+    return false;
+  });
+}
+
+function runScheduleColor(run) {
+  return run.schedule_color || projectColor(projectForDifferentiationRun(run)) || "#176f64";
+}
+
+function actionableScheduleItems(run) {
+  return buildRunSchedule(run).filter((item) => item.kind !== "collection");
+}
+
+function scheduleTaskHtml(run, item, compact = false) {
+  const completedEvent = completionEventForItem(run, item);
+  const detail = item.medium || item.notes || "";
+  return `<article class="schedule-task ${completedEvent ? "is-complete" : ""}" style="--run-color:${escapeHtml(runScheduleColor(run))}">
+    <button class="task-check" data-toggle-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-day="${escapeHtml(item.task_day)}" type="button" aria-label="${completedEvent ? "Mark task incomplete" : "Mark task complete"}" aria-pressed="${completedEvent ? "true" : "false"}">${completedEvent ? "✓" : ""}</button>
+    <div>
+      <div class="schedule-task-heading"><strong>${escapeHtml(item.title)}</strong>${compact ? "" : `<span>${escapeHtml(formatDate(dateValueString(item.date)))} · D${escapeHtml(item.task_day)}</span>`}</div>
+      ${detail ? `<p>${escapeHtml(detail)}</p>` : ""}
+      <small>${escapeHtml(differentiationRunLabel(run))}</small>
+    </div>
+  </article>`;
+}
+
+function renderTodayDifferentiationTasks() {
+  const today = todayValue();
+  const due = state.differentiationRuns
+    .filter((run) => run.status === "active")
+    .flatMap((run) => actionableScheduleItems(run).filter((item) => dateValueString(item.date) === today).map((item) => ({ run, item })));
+  els.todayDifferentiationTasks.innerHTML = due.length
+    ? due.map(({ run, item }) => scheduleTaskHtml(run, item, true)).join("")
+    : '<div class="empty-state">No differentiation tasks scheduled for today.</div>';
+}
+
+function renderRunSchedule() {
+  const run = state.differentiationRuns.find((item) => item.id === els.scheduleRunSelect?.value) || state.differentiationRuns[0];
+  if (!run) {
+    els.runSchedule.innerHTML = '<div class="empty-state">Start a differentiation to generate its schedule.</div>';
+    return;
+  }
+  if (els.scheduleRunSelect.value !== run.id) els.scheduleRunSelect.value = run.id;
+  const today = todayValue();
+  const schedule = buildRunSchedule(run);
+  els.runSchedule.innerHTML = schedule.map((item) => {
+    if (item.kind !== "collection") return scheduleTaskHtml(run, item);
+    const itemDate = dateValueString(item.date);
+    const stateClass = itemDate === today ? "is-today" : itemDate < today ? "is-past" : "";
+    const kindLabel = item.kind === "automatic" ? "Auto-scheduled" : item.kind === "collection" ? "Collection" : item.task_type || "Protocol task";
+    const detail = item.kind === "collection"
+      ? [item.quantity, item.notes].filter(Boolean).join(" · ")
+      : item.medium || item.notes;
+    return `<article class="schedule-row ${stateClass}">
+      <div class="schedule-date"><strong>${escapeHtml(formatDate(itemDate))}</strong><span>D${item.task_day}</span></div>
+      <div><span class="schedule-kind">${escapeHtml(kindLabel)}</span><h4>${escapeHtml(item.title)}</h4>${detail ? `<p>${escapeHtml(detail)}</p>` : ""}</div>
+    </article>`;
+  }).join("") || '<div class="empty-state">This protocol has no scheduled tasks.</div>';
 }
 
 function renderDifferentiationWellCheckboxes() {
@@ -1573,7 +1771,7 @@ function renderCultureItem(culture) {
   const badgeClass = statusClass[culture.status] || "";
   const meta = [
     culture.project,
-    preferredCellLineName(culture.cell_lines),
+    `Cell lines: ${cellLinesForCulture(culture.id).map(cellLineDisplayName).join(", ") || preferredCellLineName(culture.cell_lines)}`,
     memberNames(cultureMemberIds(culture.id)) ? `Members: ${memberNames(cultureMemberIds(culture.id))}` : null,
     culture.initial_cell_type,
     culture.start_date ? `Started: ${formatDate(culture.start_date)}` : null,
@@ -1746,11 +1944,11 @@ function renderEvents() {
       project: projectForDifferentiationRun(run),
       date: event.event_date,
       createdAt: event.created_at,
-      title: event.event_type || "Differentiation event",
+      title: event.scheduled_title || event.event_type || "Differentiation event",
       badge: "Differentiation",
       editAttribute: `data-edit-differentiation-event="${event.id}"`,
       photoUrl: event.photo_url,
-      notes: event.notes,
+      notes: [event.medium, event.notes].filter(Boolean).join(" · "),
       meta: uniqueValues([
         projectForDifferentiationRun(run),
         run ? differentiationRunLabel(run) : null,
@@ -1797,7 +1995,7 @@ function renderEvents() {
                 </div>
               </div>
               ${item.notes ? `<p class="event-notes">${escapeHtml(item.notes)}</p>` : ""}
-              ${item.photoUrl ? `<img class="event-photo" src="${escapeHtml(item.photoUrl)}" alt="Event photo">` : ""}
+              ${item.photoUrl ? `<img class="event-photo" src="${escapeHtml(displayPhotoUrl(item.photoUrl))}" alt="Event photo">` : ""}
             </article>
           `).join("")}
         </div>
@@ -1891,6 +2089,7 @@ function clearData() {
   state.projects = [];
   state.cellLines = [];
   state.cultures = [];
+  state.cultureCellLines = [];
   state.events = [];
   state.vessels = [];
   state.vesselWells = [];
@@ -1900,25 +2099,75 @@ function clearData() {
   state.differentiationProtocols = [];
   state.protocolTasks = [];
   state.differentiationRuns = [];
+  state.differentiationRunCellLines = [];
   state.differentiationRunWells = [];
   state.differentiationEvents = [];
+  state.signedPhotoUrls = new Map();
   state.selectedVesselId = null;
   state.selectedWells = new Set();
   state.selectedCryoBoxId = null;
   state.selectedCryoPositions = new Set();
 }
 
+function photoStoragePath(value) {
+  if (!value) return null;
+  if (!/^https?:\/\//i.test(String(value))) {
+    return String(value).replace(new RegExp(`^${PHOTO_BUCKET}/`), "");
+  }
+  try {
+    const pathname = new URL(value).pathname;
+    const marker = `/${PHOTO_BUCKET}/`;
+    const markerIndex = pathname.indexOf(marker);
+    return markerIndex >= 0 ? decodeURIComponent(pathname.slice(markerIndex + marker.length)) : null;
+  } catch (_error) {
+    return String(value).replace(new RegExp(`^${PHOTO_BUCKET}/`), "");
+  }
+}
+
+function displayPhotoUrl(value) {
+  return state.signedPhotoUrls.get(value) || value;
+}
+
+async function refreshSignedPhotoUrls() {
+  if (!state.authAvailable || !state.session) return;
+  const photoValues = uniqueValues([
+    ...state.events.map((event) => event.photo_url),
+    ...state.differentiationEvents.map((event) => event.photo_url),
+  ]);
+  const signedEntries = await Promise.all(photoValues.map(async (value) => {
+    const path = photoStoragePath(value);
+    if (!path) return [value, value];
+    const { data, error } = await db.storage.from(PHOTO_BUCKET).createSignedUrl(path, 3600);
+    return [value, error ? null : data?.signedUrl || null];
+  }));
+  state.signedPhotoUrls = new Map(signedEntries.filter(([, signedUrl]) => signedUrl));
+}
+
 function renderAuthState() {
-  const signedIn = Boolean(state.session);
-  const authRequired = state.authAvailable;
+  const requiresSignIn = state.authAvailable;
+  const signedIn = Boolean(state.session && state.user);
+  const accessPending = requiresSignIn && signedIn && state.profile?.is_active === false;
   document.querySelectorAll(".app-shell").forEach((element) => {
-    element.classList.toggle("is-hidden", authRequired && !signedIn);
+    element.classList.toggle("is-hidden", requiresSignIn && (!signedIn || accessPending));
   });
-  els.authPanel.classList.toggle("is-hidden", !authRequired || signedIn);
-  els.userStrip.classList.toggle("is-hidden", !authRequired || !signedIn);
-  els.currentUserLabel.textContent = signedIn
-    ? `${profileName(state.profile) || state.user?.email || "Signed in"}${isAdmin() ? " - admin" : ""}`
-    : "";
+  els.authPanel?.classList.toggle("is-hidden", !requiresSignIn || (signedIn && !accessPending));
+  els.userStrip?.classList.toggle("is-hidden", !requiresSignIn || !signedIn);
+  els.authForm?.classList.toggle("is-hidden", accessPending);
+  els.authOtpForm?.closest(".auth-code-panel")?.classList.toggle("is-hidden", accessPending);
+  const authTitle = document.querySelector("#authTitle");
+  if (authTitle) authTitle.textContent = accessPending ? "Access pending" : "Sign in without a password";
+  if (accessPending) {
+    setAuthMessage("Your account is ready, but an administrator still needs to assign project or culture access.");
+  } else if (!signedIn && els.authMessage?.textContent.startsWith("Your account is ready")) {
+    setAuthMessage("Only approved project members can access lab records.");
+  }
+  if (els.currentUserLabel) {
+    const pendingLabel = accessPending ? " · awaiting access" : "";
+    els.currentUserLabel.textContent = signedIn ? `${profileName(state.profile) || state.user.email || "Signed in"}${pendingLabel}` : "";
+  }
+  if (els.authFileWarning) {
+    els.authFileWarning.classList.toggle("is-hidden", window.location.protocol !== "file:");
+  }
   renderMemberSelectors();
 }
 
@@ -1934,6 +2183,8 @@ function renderAll() {
   renderDifferentiationProtocols();
   renderProtocolTasks();
   renderDifferentiationRuns();
+  renderRunSchedule();
+  renderTodayDifferentiationTasks();
   renderEvents();
   renderProjects();
   renderMetrics();
@@ -1965,22 +2216,31 @@ function isMissingTableError(error) {
 }
 
 async function detectAuthTables() {
-  const { error } = await db.from("profiles").select("id").limit(1);
-  state.authAvailable = !isMissingTableError(error);
-  if (error && state.authAvailable) throw error;
-  if (!state.authAvailable) {
+  const { data: securityStatus, error: statusError } = await db
+    .from("app_security_status")
+    .select("auth_required")
+    .eq("id", 1)
+    .maybeSingle();
+
+  if (isMissingTableError(statusError) || !securityStatus?.auth_required) {
+    state.authAvailable = false;
     state.session = null;
     state.user = null;
-    state.profile = null;
-    state.profiles = [];
-    state.projectMembers = [];
-    state.cultureMembers = [];
+    return;
   }
+  if (statusError) throw statusError;
+
+  state.authAvailable = true;
+  const { data, error } = await db.auth.getSession();
+  if (error) throw error;
+  state.session = data.session || null;
+  state.user = data.session?.user || null;
 }
 
-async function loadAll() {
+async function loadAllInternal() {
   setStatus("loading", "Loading");
   setLastChecked();
+  showLoadIssues([]);
 
   if (!ensureDb()) {
     renderAll();
@@ -2014,19 +2274,23 @@ async function loadAll() {
       Promise.resolve({ data: [], error: null }),
     ];
 
-  const [profileResult, profilesResult, projectMembersResult, cultureMembersResult, cellLinesResult, culturesResult, eventsResult] = await withTimeout(Promise.all([
+  const baseRequests = [
     ...authRequests,
     db.from("cell_lines").select("*").order("name", { ascending: true }),
     db
       .from("cultures")
-      .select("*, cell_lines(name, full_name, identifier, clone)")
+      .select("*, cell_lines!cell_line_id(name, full_name, identifier, clone)")
       .order("created_at", { ascending: false }),
     db
       .from("culture_events")
-      .select("*, cultures(culture_name, passage_number, cell_lines(name, full_name, identifier, clone))")
+      .select("*, cultures(culture_name, passage_number, cell_lines!cell_line_id(name, full_name, identifier, clone))")
       .order("event_date", { ascending: false })
       .order("created_at", { ascending: false }),
-  ]), 15000, "Database request timed out.");
+  ];
+  const baseLabels = ["Profile", "People", "Project access", "Culture access", "Cell lines", "Cultures", "Activity"];
+  const [profileResult, profilesResult, projectMembersResult, cultureMembersResult, cellLinesResult, culturesResult, eventsResult] = await Promise.all(
+    baseRequests.map((request, index) => moduleRequest(baseLabels[index], request))
+  );
 
   const authTablesMissing =
     isMissingTableError(profileResult.error) ||
@@ -2045,7 +2309,9 @@ async function loadAll() {
     setStatus("error", "Error");
     setLoadIssue(baseError.message);
     showToast(`Error loading data: ${baseError.message}`);
-    return;
+    state.cellLines = cellLinesResult.data || [];
+    state.cultures = culturesResult.data || [];
+    state.events = eventsResult.data || [];
   }
 
   state.profile = profileResult.data || null;
@@ -2053,7 +2319,7 @@ async function loadAll() {
   state.projectMembers = projectMembersResult.data || [];
   state.cultureMembers = cultureMembersResult.data || [];
 
-  const [projectsResult, vesselsResult, wellsResult, vesselCulturesResult, cryoBoxesResult, cryoVialsResult, protocolsResult, protocolTasksResult, differentiationRunsResult, differentiationRunWellsResult, differentiationEventsResult] = await withTimeout(Promise.all([
+  const moduleRequests = [
     db
       .from("projects")
       .select("*")
@@ -2064,11 +2330,12 @@ async function loadAll() {
       .order("created_at", { ascending: false }),
     db
       .from("vessel_wells")
-      .select("*, cell_lines(name, full_name, identifier, clone), cultures(culture_name, passage_number, cell_lines(name, full_name, identifier, clone))")
+      .select("*, cell_lines!cell_line_id(name, full_name, identifier, clone), cultures(culture_name, passage_number, cell_lines!cell_line_id(name, full_name, identifier, clone))")
       .order("well", { ascending: true }),
     db
       .from("vessel_cultures")
-      .select("*, cultures(culture_name, passage_number, cell_lines(name, full_name, identifier, clone))"),
+      .select("*, cultures(culture_name, passage_number, cell_lines!cell_line_id(name, full_name, identifier, clone))"),
+    db.from("culture_cell_lines").select("*"),
     db
       .from("cryo_boxes")
       .select("*")
@@ -2076,7 +2343,7 @@ async function loadAll() {
       .order("name", { ascending: true }),
     db
       .from("cryo_vials")
-      .select("*, cell_lines(name, full_name, identifier, clone)")
+      .select("*, cell_lines!cell_line_id(name, full_name, identifier, clone)")
       .order("position", { ascending: true }),
     db
       .from("differentiation_protocols")
@@ -2094,15 +2361,21 @@ async function loadAll() {
     db
       .from("differentiation_run_wells")
       .select("*"),
+    db.from("differentiation_run_cell_lines").select("*"),
     db
       .from("differentiation_events")
       .select("*")
       .order("event_date", { ascending: false })
       .order("created_at", { ascending: false }),
-  ]), 15000, "Database request timed out.");
+  ];
+  const moduleLabels = ["Projects", "Plates", "Well maps", "Plate cultures", "Culture cell lines", "Cryoboxes", "Cryovials", "Protocols", "Protocol tasks", "Differentiations", "Differentiation wells", "Differentiation cell lines", "Differentiation activity"];
+  const [projectsResult, vesselsResult, wellsResult, vesselCulturesResult, cultureCellLinesResult, cryoBoxesResult, cryoVialsResult, protocolsResult, protocolTasksResult, differentiationRunsResult, differentiationRunWellsResult, differentiationRunCellLinesResult, differentiationEventsResult] = await Promise.all(
+    moduleRequests.map((request, index) => moduleRequest(moduleLabels[index], request))
+  );
 
   state.cellLines = cellLinesResult.data || [];
   state.cultures = culturesResult.data || [];
+  state.cultureCellLines = cultureCellLinesResult.data || [];
   state.events = eventsResult.data || [];
   const projectsMissing = projectsResult.error?.code === "PGRST205";
   state.projects = projectsMissing
@@ -2121,16 +2394,22 @@ async function loadAll() {
   state.cryoBoxes = cryoTablesMissing ? [] : cryoBoxesResult.data || [];
   state.cryoVials = cryoTablesMissing ? [] : cryoVialsResult.data || [];
   const protocolTasksMissing = protocolTasksResult.error?.code === "PGRST205";
+  const batchCellLineTablesMissing =
+    cultureCellLinesResult.error?.code === "PGRST205" ||
+    differentiationRunCellLinesResult.error?.code === "PGRST205";
   const differentiationTablesMissing =
     protocolsResult.error?.code === "PGRST205" ||
     differentiationRunsResult.error?.code === "PGRST205" ||
     differentiationRunWellsResult.error?.code === "PGRST205" ||
+    differentiationRunCellLinesResult.error?.code === "PGRST205" ||
     differentiationEventsResult.error?.code === "PGRST205";
   state.differentiationProtocols = differentiationTablesMissing ? [] : protocolsResult.data || [];
   state.protocolTasks = differentiationTablesMissing || protocolTasksMissing ? [] : protocolTasksResult.data || [];
   state.differentiationRuns = differentiationTablesMissing ? [] : differentiationRunsResult.data || [];
   state.differentiationRunWells = differentiationTablesMissing ? [] : differentiationRunWellsResult.data || [];
+  state.differentiationRunCellLines = differentiationTablesMissing ? [] : differentiationRunCellLinesResult.data || [];
   state.differentiationEvents = differentiationTablesMissing ? [] : differentiationEventsResult.data || [];
+  await refreshSignedPhotoUrls();
   if (state.selectedVesselId && !state.vessels.some((vessel) => vessel.id === state.selectedVesselId)) {
     state.selectedVesselId = null;
   }
@@ -2138,6 +2417,18 @@ async function loadAll() {
     state.selectedCryoBoxId = null;
   }
   renderAll();
+  const loadIssues = [...baseLabels.map((_, index) => loadIssueFor([
+    profileResult, profilesResult, projectMembersResult, cultureMembersResult, cellLinesResult, culturesResult, eventsResult,
+  ][index])), ...moduleLabels.map((_, index) => loadIssueFor([
+    projectsResult, vesselsResult, wellsResult, vesselCulturesResult, cultureCellLinesResult, cryoBoxesResult, cryoVialsResult, protocolsResult, protocolTasksResult, differentiationRunsResult, differentiationRunWellsResult, differentiationRunCellLinesResult, differentiationEventsResult,
+  ][index]))].filter(Boolean);
+  showLoadIssues(loadIssues);
+  if (batchCellLineTablesMissing) {
+    setStatus("error", "Migration needed");
+    setLoadIssue("Batch cell-line tables are missing.");
+    showToast("Run the multi-cell-line batches migration in Supabase.");
+    return;
+  }
   if (projectsMissing) {
     setStatus("error", "Migration needed");
     setLoadIssue("Projects table is missing.");
@@ -2179,6 +2470,8 @@ async function loadAll() {
     (protocolTasksMissing ? null : protocolTasksResult.error) ||
     differentiationRunsResult.error ||
     differentiationRunWellsResult.error ||
+    cultureCellLinesResult.error ||
+    differentiationRunCellLinesResult.error ||
     differentiationEventsResult.error;
   if (vesselError) {
     setStatus("error", "Error");
@@ -2196,6 +2489,25 @@ async function loadAll() {
   }
 }
 
+let activeLoad = null;
+
+function loadAll() {
+  if (activeLoad) return activeLoad;
+  const refreshButton = els.refreshToday;
+  if (refreshButton) {
+    refreshButton.disabled = true;
+    refreshButton.setAttribute("aria-busy", "true");
+  }
+  activeLoad = loadAllInternal().finally(() => {
+    activeLoad = null;
+    if (refreshButton) {
+      refreshButton.disabled = false;
+      refreshButton.removeAttribute("aria-busy");
+    }
+  });
+  return activeLoad;
+}
+
 async function uploadPhoto(file) {
   if (!file) return null;
   if (!ensureDb()) throw new Error("Database is not connected.");
@@ -2211,6 +2523,7 @@ async function uploadPhoto(file) {
 
   if (error) throw error;
 
+  if (state.authAvailable) return path;
   const { data } = db.storage.from(PHOTO_BUCKET).getPublicUrl(path);
   return data.publicUrl;
 }
@@ -2247,7 +2560,18 @@ function compressImage(file) {
 async function deleteRecord(table, id, label) {
   if (!id) return;
   if (!ensureDb()) return;
-  if (!window.confirm(`Delete this ${label}? This cannot be undone.`)) return;
+  const impacts = {
+    "cell line": "Cultures, wells, cryovials, and differentiations may still reference it.",
+    culture: "Linked plates, scheduled work, and activity may be affected.",
+    plate: "Its well map and culture links may also be removed.",
+    cryobox: "All mapped vial positions in this box may also be removed.",
+    protocol: "Existing differentiation schedules may still refer to this protocol.",
+    "protocol task": "Future schedules generated from this protocol will no longer include this task.",
+    "differentiation run": "Its well assignments and scheduled work may also be removed.",
+    activity: "This removes the history entry only and cannot be undone.",
+  };
+  const impact = impacts[label] || "Related records may be affected.";
+  if (!window.confirm(`Delete this ${label}?\n\n${impact}\n\nThis action cannot be undone.`)) return;
 
   const { error } = await db.from(table).delete().eq("id", id);
   if (error) {
@@ -2431,11 +2755,16 @@ async function handleCultureSubmit(event) {
   const form = event.currentTarget;
   const submit = form.querySelector("button[type='submit']");
   const data = new FormData(form);
+  const cellLineIds = getCheckedValues(els.cultureCellLineCheckboxes);
+  if (cellLineIds.length === 0) {
+    showToast("Select at least one cell line for this culture batch.");
+    return;
+  }
 
   submit.disabled = true;
   const plateSetups = plateSetupsFromForm(form);
   const payload = {
-    cell_line_id: data.get("cell_line_id"),
+    cell_line_id: cellLineIds[0],
     culture_name: valueOrNull(data.get("culture_name")),
     project: valueFromSelectWithCustom(data, "project", "custom_project"),
     start_date: valueOrNull(data.get("start_date")),
@@ -2450,13 +2779,25 @@ async function handleCultureSubmit(event) {
 
   const editingId = valueOrNull(data.get("id"));
   const query = editingId
-    ? db.from("cultures").update(payload).eq("id", editingId).select("*, cell_lines(name, full_name, identifier, clone)").single()
-    : db.from("cultures").insert(payload).select("*, cell_lines(name, full_name, identifier, clone)").single();
+    ? db.from("cultures").update(payload).eq("id", editingId).select("*, cell_lines!cell_line_id(name, full_name, identifier, clone)").single()
+    : db.from("cultures").insert(payload).select("*, cell_lines!cell_line_id(name, full_name, identifier, clone)").single();
   const { data: savedCulture, error } = await query;
   submit.disabled = false;
 
   if (error) {
     showToast(`Error starting culture: ${error.message}`);
+    return;
+  }
+
+  const cultureId = savedCulture?.id || editingId;
+  const { error: clearLinesError } = await db.from("culture_cell_lines").delete().eq("culture_id", cultureId);
+  if (clearLinesError) {
+    showToast(`Culture saved, but cell lines could not be updated: ${clearLinesError.message}`);
+    return;
+  }
+  const { error: linkLinesError } = await db.from("culture_cell_lines").insert(cellLineIds.map((cellLineId) => ({ culture_id: cultureId, cell_line_id: cellLineId })));
+  if (linkLinesError) {
+    showToast(`Culture saved, but cell lines could not be linked: ${linkLinesError.message}`);
     return;
   }
 
@@ -2612,7 +2953,7 @@ async function handleDeleteSelectedWells() {
     showToast("Select at least one well first.");
     return;
   }
-  if (!window.confirm(`Delete ${wells.length} selected well${wells.length === 1 ? "" : "s"}? This cannot be undone.`)) return;
+  if (!window.confirm(`Delete ${wells.length} selected well${wells.length === 1 ? "" : "s"}?\n\nTheir cell-line and culture assignments will be removed from this plate.\n\nThis action cannot be undone.`)) return;
 
   const { error } = await db
     .from("vessel_wells")
@@ -2765,7 +3106,7 @@ async function handleDeleteSelectedVials() {
     showToast("Select at least one vial first.");
     return;
   }
-  if (!window.confirm(`Delete ${positions.length} selected vial${positions.length === 1 ? "" : "s"}? This cannot be undone.`)) return;
+  if (!window.confirm(`Delete ${positions.length} selected vial${positions.length === 1 ? "" : "s"}?\n\nThe selected inventory positions will become empty; this does not change the source cell line.\n\nThis action cannot be undone.`)) return;
 
   const { error } = await db
     .from("cryo_vials")
@@ -2831,6 +3172,7 @@ async function handleProtocolTaskSubmit(event) {
     title: valueOrNull(data.get("title")),
     task_type: valueOrNull(data.get("task_type")),
     estimated_duration_hours: numberOrNull(data.get("estimated_duration_hours")),
+    medium: valueOrNull(data.get("medium")),
     notes: valueOrNull(data.get("notes")),
   };
 
@@ -2851,6 +3193,188 @@ async function handleProtocolTaskSubmit(event) {
   await loadAll();
 }
 
+async function cloneProtocol(protocolId) {
+  if (!ensureDb()) return;
+  const source = state.differentiationProtocols.find((protocol) => protocol.id === protocolId);
+  if (!source) return;
+  const { id, created_at, created_by, ...copy } = source;
+  const { data: cloned, error } = await db.from("differentiation_protocols")
+    .insert({ ...copy, name: `${source.name} (adaptation)`, version: source.version ? `${source.version} copy` : "adaptation" })
+    .select("id").single();
+  if (error) return showToast(`Error cloning protocol: ${error.message}`);
+  const tasks = state.protocolTasks.filter((task) => task.protocol_id === protocolId).map(({ id: taskId, created_at: taskCreated, created_by: taskCreator, ...task }) => ({ ...task, protocol_id: cloned.id }));
+  if (tasks.length) {
+    const { error: taskError } = await db.from("differentiation_protocol_tasks").insert(tasks);
+    if (taskError) return showToast(`Protocol cloned, but its tasks could not be copied: ${taskError.message}`);
+  }
+  await loadAll();
+  const clonedProtocol = state.differentiationProtocols.find((protocol) => protocol.id === cloned.id);
+  if (clonedProtocol) fillProtocolForm(clonedProtocol);
+  showToast("Protocol cloned. Rename it and adapt any task.");
+}
+
+function parseProtocolFile(text) {
+  const lines = text.replace(/^\uFEFF/, "").trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) throw new Error("The file needs a header and at least one protocol row.");
+  const delimiter = lines[0].includes("\t") ? "\t" : ",";
+  const parseLine = (line) => {
+    if (delimiter === "\t") return line.split("\t").map((value) => value.trim());
+    const values = [];
+    let value = "";
+    let quoted = false;
+    for (let index = 0; index < line.length; index += 1) {
+      const character = line[index];
+      if (character === '"' && quoted && line[index + 1] === '"') {
+        value += '"';
+        index += 1;
+      } else if (character === '"') {
+        quoted = !quoted;
+      } else if (character === "," && !quoted) {
+        values.push(value.trim());
+        value = "";
+      } else {
+        value += character;
+      }
+    }
+    values.push(value.trim());
+    return values;
+  };
+  const normalize = (value) => value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+  const headers = parseLine(lines[0]).map(normalize);
+  const findIndex = (...aliases) => headers.findIndex((header) => aliases.map(normalize).includes(header));
+  const indexes = {
+    name: findIndex("Protocol name", "Nome_Protocolo", "protocol"),
+    day: findIndex("Day", "Dia"),
+    task: findIndex("Base task", "Tarefa_Base", "Task"),
+    medium: findIndex("Medium", "Meio", "Meio_Especifico"),
+  };
+  if (indexes.name < 0 || indexes.day < 0 || indexes.task < 0) throw new Error("Expected columns: Protocol name, Day, Base task, and Medium.");
+  return lines.slice(1).map(parseLine).map((values) => ({
+    protocolName: values[indexes.name]?.trim(),
+    day: Number(values[indexes.day]),
+    title: values[indexes.task]?.trim(),
+    medium: indexes.medium >= 0 ? values[indexes.medium]?.trim() : null,
+  })).filter((row) => row.protocolName && Number.isInteger(row.day) && row.title && row.title !== "-");
+}
+
+async function handleProtocolImport(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file || !ensureDb()) return;
+  try {
+    const rows = parseProtocolFile(await file.text());
+    if (!rows.length) throw new Error("No actionable protocol rows were found.");
+    const names = [...new Set(rows.map((row) => row.protocolName))];
+    for (const name of names) {
+      const existing = state.differentiationProtocols.find((protocol) => protocol.name === name);
+      let protocolId = existing?.id;
+      if (!protocolId) {
+        const { data, error } = await db.from("differentiation_protocols").insert({ name, expected_duration_days: Math.max(...rows.filter((row) => row.protocolName === name).map((row) => row.day)), version: "Imported" }).select("id").single();
+        if (error) throw error;
+        protocolId = data.id;
+      }
+      const importedTasks = rows.filter((row) => row.protocolName === name).map((row) => ({ protocol_id: protocolId, task_day: row.day, title: row.title, task_type: /collect/i.test(row.title) ? "Collection" : /medium|induction/i.test(row.title) ? "Media change" : "Other", medium: row.medium && row.medium !== "-" ? row.medium : null }));
+      const days = importedTasks.map((task) => task.task_day);
+      if (days.length) await db.from("differentiation_protocol_tasks").delete().eq("protocol_id", protocolId).in("task_day", days);
+      const { error: taskError } = await db.from("differentiation_protocol_tasks").insert(importedTasks);
+      if (taskError) throw taskError;
+    }
+    showToast(`${names.length} protocol${names.length === 1 ? "" : "s"} imported.`);
+    await loadAll();
+  } catch (error) {
+    showToast(`Error importing protocol: ${error.message}`);
+  }
+}
+
+async function handleCollectionSubmit(event) {
+  event.preventDefault();
+  if (!ensureDb()) return;
+  const data = new FormData(event.currentTarget);
+  const payload = {
+    differentiation_run_id: valueOrNull(data.get("differentiation_run_id")),
+    event_date: valueOrNull(data.get("event_date")),
+    event_day: numberOrNull(data.get("event_day")),
+    event_type: "Collection",
+    quantity: valueOrNull(data.get("quantity")),
+    experiment: valueOrNull(data.get("experiment")),
+    notes: valueOrNull(data.get("notes")),
+    performed_by: profileName(state.profile),
+  };
+  const { error } = await db.from("differentiation_events").insert(payload);
+  if (error) return showToast(`Error adding collection: ${error.message}`);
+  event.currentTarget.reset();
+  els.collectionDate.value = todayValue();
+  showToast("Collection added to the run timeline.");
+  await loadAll();
+}
+
+async function toggleScheduledTask(button) {
+  if (!ensureDb()) return;
+  const run = state.differentiationRuns.find((item) => item.id === button.dataset.toggleScheduleTask);
+  if (!run) return;
+  const taskDay = Number(button.dataset.taskDay);
+  const item = actionableScheduleItems(run).find((candidate) =>
+    candidate.kind === button.dataset.taskKind &&
+    Number(candidate.task_day) === taskDay &&
+    (!button.dataset.taskId || candidate.id === button.dataset.taskId)
+  );
+  if (!item) return;
+  const completed = completionEventForItem(run, item);
+  button.disabled = true;
+  if (completed) {
+    const { error } = await db.from("differentiation_events").delete().eq("id", completed.id);
+    if (error) {
+      button.disabled = false;
+      showToast(`Error reopening task: ${error.message}`);
+      return;
+    }
+    showToast("Task reopened and removed from Activity.");
+  } else {
+    const payload = {
+      differentiation_run_id: run.id,
+      protocol_task_id: item.kind === "task" ? item.id : null,
+      event_date: dateValueString(item.date),
+      event_day: item.task_day,
+      event_type: item.kind === "automatic" ? "Media change" : item.task_type || "Other",
+      scheduled_title: item.title,
+      medium: item.medium || null,
+      notes: item.notes || null,
+      performed_by: profileName(state.profile),
+    };
+    const { error } = await db.from("differentiation_events").insert(payload);
+    if (error) {
+      button.disabled = false;
+      showToast(`Error completing task: ${error.message}`);
+      return;
+    }
+    showToast("Task completed and recorded in Activity.");
+  }
+  await loadAll();
+}
+
+function printableScheduleHtml(runs) {
+  const entries = runs.flatMap((run) => buildRunSchedule(run).map((item) => ({ run, item })))
+    .sort((a, b) => dateValueString(a.item.date).localeCompare(dateValueString(b.item.date)));
+  const legend = runs.map((run) => `<span><i style="background:${escapeHtml(runScheduleColor(run))}"></i>${escapeHtml(differentiationRunLabel(run))}</span>`).join("");
+  const groups = entries.reduce((map, entry) => {
+    const date = dateValueString(entry.item.date);
+    if (!map.has(date)) map.set(date, []);
+    map.get(date).push(entry);
+    return map;
+  }, new Map());
+  return `<header><h1>Organoid differentiation schedule</h1><p>Generated ${escapeHtml(formatDate(todayValue()))}</p><div class="print-legend">${legend}</div></header>
+    <div class="print-days">${Array.from(groups.entries()).map(([date, items]) => `<section class="print-day"><h2>${escapeHtml(formatDate(date))}</h2>${items.map(({ run, item }) => `<article style="--run-color:${escapeHtml(runScheduleColor(run))}"><div><strong>${escapeHtml(run.run_name)}</strong><span>D${escapeHtml(item.task_day)}</span></div><h3>${escapeHtml(item.title || item.experiment || "Collection")}</h3>${item.medium || item.quantity || item.notes ? `<p>${escapeHtml(item.medium || [item.quantity, item.notes].filter(Boolean).join(" · ") || item.notes)}</p>` : ""}</article>`).join("")}</section>`).join("")}</div>`;
+}
+
+function printSchedules(onlySelectedRun = false) {
+  const runs = onlySelectedRun
+    ? state.differentiationRuns.filter((run) => run.id === els.scheduleRunSelect.value)
+    : state.differentiationRuns.filter((run) => run.status === "active");
+  if (!runs.length) return showToast("No differentiation runs available to print.");
+  els.printSchedule.innerHTML = printableScheduleHtml(runs);
+  window.print();
+}
+
 async function handleDifferentiationRunSubmit(event) {
   event.preventDefault();
   if (!ensureDb()) return;
@@ -2864,6 +3388,12 @@ async function handleDifferentiationRunSubmit(event) {
   const selectedWells = sourceType === "wells"
     ? getCheckedValues(els.differentiationWellCheckboxes)
     : [];
+  const cellLineIds = getCheckedValues(els.differentiationCellLineCheckboxes);
+
+  if (cellLineIds.length === 0) {
+    showToast("Select at least one cell line for this differentiation batch.");
+    return;
+  }
 
   if (sourceType === "wells" && selectedWells.length === 0) {
     showToast("Select at least one source well.");
@@ -2880,6 +3410,7 @@ async function handleDifferentiationRunSubmit(event) {
     source_culture_id: sourceType === "culture" ? valueOrNull(data.get("source_culture_id")) : null,
     source_vessel_id: sourceVesselId,
     status: valueOrNull(data.get("status")) || "active",
+    schedule_color: valueOrNull(data.get("schedule_color")) || "#176f64",
     notes: valueOrNull(data.get("notes")),
   };
 
@@ -2918,6 +3449,19 @@ async function handleDifferentiationRunSubmit(event) {
       showToast(`Run started, but wells failed: ${wellsError.message}`);
       return;
     }
+  }
+
+  const { error: deleteLinesError } = await db.from("differentiation_run_cell_lines").delete().eq("differentiation_run_id", saved.id);
+  if (deleteLinesError) {
+    submit.disabled = false;
+    showToast(`Run saved, but old cell lines could not be cleared: ${deleteLinesError.message}`);
+    return;
+  }
+  const { error: lineLinksError } = await db.from("differentiation_run_cell_lines").insert(cellLineIds.map((cellLineId) => ({ differentiation_run_id: saved.id, cell_line_id: cellLineId })));
+  if (lineLinksError) {
+    submit.disabled = false;
+    showToast(`Run saved, but cell lines failed: ${lineLinksError.message}`);
+    return;
   }
 
   submit.disabled = false;
@@ -2981,186 +3525,218 @@ async function handleEventSubmit(event) {
 }
 
 function setupTabs() {
-  document.querySelectorAll(".tab").forEach((tab) => {
+  const tabs = [...document.querySelectorAll(".tab")];
+  tabs.forEach((tab, index) => {
+    const view = document.getElementById(tab.dataset.view);
+    tab.id ||= `app-tab-${index + 1}`;
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-controls", tab.dataset.view);
+    tab.setAttribute("aria-selected", String(tab.classList.contains("is-active")));
+    tab.tabIndex = tab.classList.contains("is-active") ? 0 : -1;
+    if (view) {
+      view.setAttribute("role", "tabpanel");
+      view.setAttribute("aria-labelledby", tab.id);
+    }
     tab.addEventListener("click", () => {
       setActiveView(tab.dataset.view);
     });
+    tab.addEventListener("keydown", (event) => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      const current = tabs.indexOf(tab);
+      const next = event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? tabs.length - 1
+          : (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      tabs[next].focus();
+      setActiveView(tabs[next].dataset.view);
+    });
   });
+  const activeTab = tabs.find((tab) => tab.classList.contains("is-active")) || tabs[0];
+  if (activeTab) setActiveView(activeTab.dataset.view);
 }
 
 function setActiveView(viewId) {
   document.querySelectorAll(".tab").forEach((item) => {
-    item.classList.toggle("is-active", item.dataset.view === viewId);
+    const isActive = item.dataset.view === viewId;
+    item.classList.toggle("is-active", isActive);
+    item.setAttribute("aria-selected", String(isActive));
+    item.tabIndex = isActive ? 0 : -1;
   });
   document.querySelectorAll(".view").forEach((view) => {
-    view.classList.toggle("is-active", view.id === viewId);
+    const isActive = view.id === viewId;
+    view.classList.toggle("is-active", isActive);
+    view.hidden = !isActive;
   });
 }
 
-async function handleAuthSubmit(event) {
-  event.preventDefault();
-  if (!ensureDb()) return;
+function bindBusyForm(form, handler) {
+  if (!form) return;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (form.dataset.busy === "true") return;
+    const submitter = event.submitter || form.querySelector('[type="submit"]');
+    form.dataset.busy = "true";
+    form.setAttribute("aria-busy", "true");
+    if (submitter) {
+      submitter.disabled = true;
+      submitter.setAttribute("aria-busy", "true");
+    }
+    try {
+      await handler(event);
+    } finally {
+      delete form.dataset.busy;
+      form.removeAttribute("aria-busy");
+      if (submitter) {
+        submitter.disabled = false;
+        submitter.removeAttribute("aria-busy");
+      }
+    }
+  });
+}
 
-  const submitter = event.submitter;
-  const form = event.currentTarget;
-  const data = new FormData(form);
-  const email = valueOrNull(data.get("email"));
-  const password = valueOrNull(data.get("password"));
-  const mode = submitter?.value || "signin";
-  if (!email || !password) return;
-
-  submitter.disabled = true;
-  const request = mode === "signup"
-    ? db.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: email.split("@")[0] } },
-    })
-    : db.auth.signInWithPassword({ email, password });
-  const { data: authData, error } = await request;
-  submitter.disabled = false;
-
-  if (error) {
-    showToast(`Auth error: ${error.message}`);
-    return;
-  }
-
-  if (mode === "signup" && !authData.session) {
-    const accountAlreadyExists = authData.user?.identities?.length === 0;
-    showToast(accountAlreadyExists
-      ? "This email already has an account. Use Set or reset password instead."
-      : "Account created. Check your email to confirm it before signing in.");
-    return;
-  }
-
-  form.reset();
-  showToast(mode === "signup" ? "Account created." : "Signed in.");
+function setupProgressiveDisclosure() {
+  const form = els.cellLineForm;
+  if (!form || form.querySelector(".optional-fields")) return;
+  const optionalNodes = [
+    form.elements.full_name?.closest("label"),
+    form.elements.clone?.closest("label"),
+    form.elements.source?.closest("label"),
+    form.querySelector("fieldset.form-section"),
+    form.elements.notes?.closest("label"),
+  ].filter(Boolean);
+  if (!optionalNodes.length) return;
+  const details = document.createElement("details");
+  details.className = "optional-fields wide";
+  const summary = document.createElement("summary");
+  summary.textContent = "Optional details and modifications";
+  const grid = document.createElement("div");
+  grid.className = "form-grid optional-fields-grid";
+  optionalNodes.forEach((node) => grid.append(node));
+  details.append(summary, grid);
+  form.querySelector(".form-actions")?.before(details);
 }
 
 function authRedirectUrl() {
-  if (window.location.protocol === "file:") return null;
+  if (window.location.protocol === "file:") return PUBLISHED_APP_URL;
   return `${window.location.origin}${window.location.pathname}`;
 }
 
-async function handleMagicLink() {
+function setAuthMessage(message, isError = false) {
+  if (!els.authMessage) return;
+  els.authMessage.textContent = message;
+  els.authMessage.classList.toggle("is-error", isError);
+}
+
+async function handleMagicLink(event) {
+  event?.preventDefault();
   if (!ensureDb()) return;
   const email = valueOrNull(els.authForm.elements.email.value);
   if (!email) {
-    showToast("Enter your email first.");
+    setAuthMessage("Enter your work email first.", true);
     return;
   }
 
   const emailRedirectTo = authRedirectUrl();
-  if (!emailRedirectTo) {
-    showToast("Open the app with http://localhost:5173 before using email login links.");
-    return;
-  }
-
   els.magicLinkButton.disabled = true;
   const { error } = await db.auth.signInWithOtp({
     email,
     options: {
       emailRedirectTo,
+      shouldCreateUser: true,
       data: { full_name: email.split("@")[0] },
     },
   });
   els.magicLinkButton.disabled = false;
 
   if (error) {
-    showToast(`Login link error: ${error.message}`);
+    setAuthMessage(`Could not send the sign-in link: ${error.message}`, true);
     return;
   }
-  showToast("Login link sent. Check your email.");
+  setAuthMessage(window.location.protocol === "file:"
+    ? `Sign-in link sent to ${email}. It will open the secure published app.`
+    : `Sign-in link sent to ${email}. You can close this message after opening the link.`);
 }
 
-async function handleResetPassword() {
+async function handleOtpVerification(event) {
+  event.preventDefault();
   if (!ensureDb()) return;
   const email = valueOrNull(els.authForm.elements.email.value);
-  if (!email) {
-    showToast("Enter your email first.");
+  const token = valueOrNull(new FormData(event.currentTarget).get("token"));
+  if (!email || !token) {
+    setAuthMessage("Enter the email that received the message and its six-digit code.", true);
     return;
   }
-  const redirectTo = authRedirectUrl();
-  if (!redirectTo) {
-    showToast("Open the app with http://localhost:5173 before resetting your password.");
-    return;
-  }
-  els.resetPasswordButton.disabled = true;
-  const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo });
-  els.resetPasswordButton.disabled = false;
-  showToast(error ? `Password reset error: ${error.message}` : "Password setup link sent. Check your email.");
-}
-
-async function finishPasswordRecovery() {
-  const password = window.prompt("Choose a new password (at least 6 characters):");
-  if (!password) {
-    showToast("Password setup canceled. You are signed in and can try again later.");
-    return;
-  }
-  if (password.length < 6) {
-    showToast("The password must contain at least 6 characters. Open the email link again to retry.");
-    return;
-  }
-  const confirmation = window.prompt("Type the new password again:");
-  if (password !== confirmation) {
-    showToast("Passwords did not match. Open the email link again to retry.");
-    return;
-  }
-  const { error } = await db.auth.updateUser({ password });
-  showToast(error ? `Password update error: ${error.message}` : "Password saved. You can now use email and password.");
+  els.verifyOtpButton.disabled = true;
+  const { error } = await db.auth.verifyOtp({ email, token, type: "email" });
+  els.verifyOtpButton.disabled = false;
+  setAuthMessage(error ? `Code verification failed: ${error.message}` : "Code verified. Loading your workspace…", Boolean(error));
 }
 
 async function handleSignOut() {
   if (!ensureDb()) return;
-  await db.auth.signOut();
+  const { error } = await db.auth.signOut({ scope: "local" });
+  if (error) {
+    showToast(`Sign-out error: ${error.message}`);
+    return;
+  }
+  state.session = null;
+  state.user = null;
   clearData();
   renderAll();
+  setStatus("error", "Sign in");
 }
 
 async function initAuth() {
-  els.authFileWarning?.classList.toggle("is-hidden", window.location.protocol !== "file:");
   if (!ensureDb()) {
     renderAll();
     return;
   }
-
-  const { data, error } = await db.auth.getSession();
-  if (error) {
-    showToast(`Auth error: ${error.message}`);
-  }
-  state.session = data?.session || null;
-  state.user = state.session?.user || null;
-
+  els.authForm?.addEventListener("submit", handleMagicLink);
+  els.authOtpForm?.addEventListener("submit", handleOtpVerification);
+  els.signOutButton?.addEventListener("click", handleSignOut);
   db.auth.onAuthStateChange((event, session) => {
+    if (!state.authAvailable) return;
     state.session = session || null;
     state.user = session?.user || null;
-    if (!session) clearData();
-    loadAll();
-    if (event === "PASSWORD_RECOVERY") window.setTimeout(finishPasswordRecovery, 0);
+    if (event === "SIGNED_IN") setAuthMessage("Signed in. Loading your workspace…");
+    window.setTimeout(async () => {
+      await loadAll();
+      if (session && typeof loadReagentInventory === "function") await loadReagentInventory();
+    }, 0);
   });
-
   await loadAll();
+  if (state.session && typeof loadReagentInventory === "function") await loadReagentInventory();
 }
 
 function setupForms() {
-  els.authForm.addEventListener("submit", handleAuthSubmit);
-  els.magicLinkButton.addEventListener("click", handleMagicLink);
-  els.resetPasswordButton.addEventListener("click", handleResetPassword);
-  els.signOutButton.addEventListener("click", handleSignOut);
-  els.projectForm.addEventListener("submit", handleProjectSubmit);
-  els.cellLineForm.addEventListener("submit", handleCellLineSubmit);
-  els.cultureForm.addEventListener("submit", handleCultureSubmit);
-  els.vesselForm.addEventListener("submit", handleVesselSubmit);
-  els.wellForm.addEventListener("submit", handleWellSubmit);
-  els.cryoBoxForm.addEventListener("submit", handleCryoBoxSubmit);
-  els.cryoVialForm.addEventListener("submit", handleCryoVialSubmit);
-  els.protocolForm.addEventListener("submit", handleProtocolSubmit);
-  els.protocolTaskForm.addEventListener("submit", handleProtocolTaskSubmit);
-  els.differentiationRunForm.addEventListener("submit", handleDifferentiationRunSubmit);
-  els.eventForm.addEventListener("submit", handleEventSubmit);
+  setupProgressiveDisclosure();
+  bindBusyForm(els.projectForm, handleProjectSubmit);
+  bindBusyForm(els.cellLineForm, handleCellLineSubmit);
+  bindBusyForm(els.cultureForm, handleCultureSubmit);
+  bindBusyForm(els.vesselForm, handleVesselSubmit);
+  bindBusyForm(els.wellForm, handleWellSubmit);
+  bindBusyForm(els.cryoBoxForm, handleCryoBoxSubmit);
+  bindBusyForm(els.cryoVialForm, handleCryoVialSubmit);
+  bindBusyForm(els.protocolForm, handleProtocolSubmit);
+  bindBusyForm(els.protocolTaskForm, handleProtocolTaskSubmit);
+  bindBusyForm(els.differentiationRunForm, handleDifferentiationRunSubmit);
+  bindBusyForm(els.collectionForm, handleCollectionSubmit);
+  bindBusyForm(els.eventForm, handleEventSubmit);
   els.historyProjectFilter.addEventListener("change", renderEvents);
   els.historyCultureFilter.addEventListener("change", renderEvents);
   els.protocolTaskProjectFilter.addEventListener("change", renderProtocolTasks);
+  els.protocolImportInput.addEventListener("change", handleProtocolImport);
+  els.scheduleRunSelect.addEventListener("change", renderRunSchedule);
+  els.collectionRunSelect.addEventListener("change", () => {
+    const run = state.differentiationRuns.find((item) => item.id === els.collectionRunSelect.value);
+    if (run && els.collectionDate.value) els.collectionDay.value = protocolDayForDate(run.day_zero_date, els.collectionDate.value);
+  });
+  els.collectionDate.addEventListener("change", () => {
+    const run = state.differentiationRuns.find((item) => item.id === els.collectionRunSelect.value);
+    if (run) els.collectionDay.value = protocolDayForDate(run.day_zero_date, els.collectionDate.value);
+  });
   els.projectViewFilter.addEventListener("change", renderProjects);
   els.cryoSearchInput.addEventListener("input", renderCryoSearchResults);
   els.toggleCryoLookup.addEventListener("click", toggleCryoLookup);
@@ -3168,6 +3744,12 @@ function setupForms() {
   els.downloadCryoXls.addEventListener("click", () => handleCryoExport("xls"));
   els.downloadCryoPdf.addEventListener("click", () => handleCryoExport("pdf"));
   els.refreshToday.addEventListener("click", loadAll);
+  els.printAllSchedules.addEventListener("click", () => printSchedules(false));
+  els.printRunSchedule.addEventListener("click", () => printSchedules(true));
+  [els.todayDifferentiationTasks, els.runSchedule].forEach((container) => container.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-toggle-schedule-task]");
+    if (button) toggleScheduledTask(button);
+  }));
   els.addPlateButton.addEventListener("click", openPlateForm);
   els.addPlateSetup.addEventListener("click", () => addPlateSetupRow());
   els.plateSetupList.addEventListener("click", (event) => {
@@ -3180,7 +3762,7 @@ function setupForms() {
   els.cultureForm.elements.culture_name.addEventListener("input", () => {
     state.cultureNameEdited = true;
   });
-  els.cultureCellLineSelect.addEventListener("change", () => syncCultureNameSuggestion());
+  els.cultureCellLineCheckboxes.addEventListener("change", () => syncCultureNameSuggestion());
   els.cultureForm.elements.start_date.addEventListener("change", () => syncCultureNameSuggestion());
   els.cellLinesList.addEventListener("click", handleCellLineListClick);
   els.culturesList.addEventListener("click", handleCulturesListClick);
@@ -3226,6 +3808,11 @@ function setupForms() {
   els.protocolProjectSelect.addEventListener("change", syncConditionalFields);
   els.runProjectSelect.addEventListener("change", syncConditionalFields);
   els.differentiationSourceType.addEventListener("change", syncDifferentiationSourceFields);
+  els.differentiationCultureSelect.addEventListener("change", () => {
+    if (els.differentiationSourceType.value === "culture") {
+      setCheckedValues(els.differentiationCellLineCheckboxes, cellLineIdsForCulture(els.differentiationCultureSelect.value));
+    }
+  });
   els.differentiationVesselSelect.addEventListener("change", renderDifferentiationWellCheckboxes);
   els.activityTargetTypeSelect.addEventListener("change", syncActivityTargetFields);
   els.performedBySelect.addEventListener("change", syncConditionalFields);
@@ -3264,6 +3851,11 @@ function toggleCryoLookup() {
 }
 
 function handleProtocolsListClick(event) {
+  const cloneButton = event.target.closest("[data-clone-protocol]");
+  if (cloneButton) {
+    cloneProtocol(cloneButton.dataset.cloneProtocol);
+    return;
+  }
   const deleteButton = event.target.closest("[data-delete-protocol]");
   if (deleteButton) {
     deleteRecord("differentiation_protocols", deleteButton.dataset.deleteProtocol, "protocol");
@@ -3640,6 +4232,7 @@ function fillProtocolTaskForm(task) {
   setFieldValue(form, "title", task.title);
   setFieldValue(form, "task_type", task.task_type || "Other");
   setFieldValue(form, "estimated_duration_hours", task.estimated_duration_hours);
+  setFieldValue(form, "medium", task.medium);
   setFieldValue(form, "notes", task.notes);
   els.protocolTaskSubmitButton.textContent = "Update task";
   els.cancelProtocolTaskEdit.classList.remove("is-hidden");
@@ -3664,7 +4257,9 @@ function fillDifferentiationRunForm(run) {
   setFieldValue(form, "source_culture_id", run.source_culture_id);
   setFieldValue(form, "source_vessel_id", run.source_vessel_id);
   setFieldValue(form, "status", run.status || "active");
+  setFieldValue(form, "schedule_color", run.schedule_color || runScheduleColor(run));
   setFieldValue(form, "notes", run.notes);
+  setCheckedValues(els.differentiationCellLineCheckboxes, cellLineIdsForRun(run.id));
   renderDifferentiationWellCheckboxes();
 
   const runWells = state.differentiationRunWells
@@ -3681,7 +4276,9 @@ function resetDifferentiationRunForm() {
   els.differentiationRunForm.reset();
   els.differentiationRunForm.elements.id.value = "";
   setDefaultDate(els.differentiationRunForm, "day_zero_date");
+  setFieldValue(els.differentiationRunForm, "schedule_color", "#176f64");
   setCheckedValues(els.differentiationWellCheckboxes, []);
+  setCheckedValues(els.differentiationCellLineCheckboxes, []);
   els.differentiationRunSubmitButton.textContent = "Start differentiation";
   els.cancelDifferentiationRunEdit.classList.add("is-hidden");
   syncDifferentiationSourceFields();
@@ -3732,7 +4329,7 @@ function resetEventForm() {
 function fillCultureForm(culture) {
   const form = els.cultureForm;
   setFieldValue(form, "id", culture.id);
-  setFieldValue(form, "cell_line_id", culture.cell_line_id);
+  setCheckedValues(els.cultureCellLineCheckboxes, cellLineIdsForCulture(culture.id));
   setFieldValue(form, "culture_name", culture.culture_name);
   setSelectOrCustom(els.cultureProjectSelect, form.elements.custom_project, culture.project);
   setFieldValue(form, "start_date", culture.start_date);
@@ -3756,6 +4353,7 @@ function fillCultureForm(culture) {
 function resetCultureForm() {
   els.cultureForm.reset();
   els.cultureForm.elements.id.value = "";
+  setCheckedValues(els.cultureCellLineCheckboxes, []);
   setDefaultDate(els.cultureForm, "start_date");
   renderPlateSetupRows([{ count: 1, mode: "whole" }]);
   renderMemberSelectors();
@@ -3852,6 +4450,7 @@ setupForms();
 syncConditionalFields();
 setDefaultDate(els.cultureForm, "start_date");
 setDefaultDate(els.differentiationRunForm, "day_zero_date");
+els.collectionDate.value = todayValue();
 setDefaultDate(els.eventForm, "event_date");
 setDefaultDate(els.cryoVialForm, "freeze_date");
 renderPlateSetupRows();
@@ -3859,3 +4458,8 @@ syncActivityTargetFields();
 syncActivityEventFields();
 renderAll();
 initAuth();
+
+window.addEventListener("app:languagechange", () => {
+  renderAll();
+  setLastChecked();
+});
