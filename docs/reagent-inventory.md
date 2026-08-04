@@ -4,6 +4,8 @@ Run these migrations in order, then refresh the app:
 
 1. `supabase/2026-08-04_reagent_inventory.sql`
 2. `supabase/2026-08-05_reagent_operations.sql`
+3. `supabase/2026-08-06_secure_passwordless_auth.sql`
+4. `supabase/2026-08-07_reagent_checklists.sql`
 
 The migrations create:
 
@@ -11,6 +13,10 @@ The migrations create:
 - `reagent_inventory_items`: physical lots and their quantity, unit, location, status, expiration, and reconstitution details.
 - `reagent_aliquots`: labeled aliquots linked to one physical inventory item.
 - `reagent_purchase_requests`: requests and their approval, order, and receipt state.
+- `reagent_checklists` and `reagent_checklist_items`: editable responsibility
+  lists with location, minimum, order, active state, and frequency.
+- `reagent_check_sessions` and `reagent_check_entries`: dated weekly history;
+  counts and ordered flags never update stock automatically.
 
 The operations migration also adds product barcode, GTIN, synonyms, supplier URL, and ownership fields to the catalog; and container barcode, open date, reorder threshold, and ownership fields to stock. The `receive_reagent_purchase` database function receives an ordered request and creates its stock item atomically.
 
@@ -23,6 +29,30 @@ The operations migration also adds product barcode, GTIN, synonyms, supplier URL
 5. Use the stock filter to find items by reagent, catalog, lot, location, or status.
 
 No workflow in this module subtracts stock automatically. Quantities only change when a user edits a stock record.
+
+## Weekly material lists
+
+The Reagents page can create, edit, assign, deactivate, and delete material
+lists. Each list has a responsible person and a configurable interval in days.
+The latest check determines the next due date. A weekly check records one count,
+an independent ordered flag, calculated low/out status, and an optional note per
+active item. A positive count below the minimum is low; zero is out; a count
+equal to the minimum remains okay, matching the source sheet's ordering behavior.
+
+The migration seeds `VictorLab TC` with the 14 rows supplied in the source
+tracking sheet. There are 13 unique products because Pen/Strep bottles and
+Pen/Strep aliquots deliberately use the same catalog product as separate list
+items. Nine products were already present in the starter catalog; four were
+added: BAMBANKER, STEMCELL ACCUTASE 07920, ReLeSR 100-0483, and Sigma insulin
+solution I9278-5ML. The migration imports the 2026-07-29 counts as the first
+historical session and assigns the active bootstrap administrator as responsible;
+if that profile is unavailable, it falls back to the first active administrator
+or member. Responsibility remains editable in the app.
+
+Deleting a list also deletes its check history and therefore requires explicit
+confirmation. An item that already appears in history should be marked inactive
+instead of deleted. Counts in weekly lists are an independent checklist record;
+they do not change `reagent_inventory_items`, aliquots, or purchase requests.
 
 ## Product and container scanning
 

@@ -26,7 +26,16 @@ Simple web app for cell culture tracking using Supabase.
 8. Confirm that the `culture-photos` bucket exists in Storage.
 9. When redirects and the first administrator email are ready, follow
     `docs/passwordless-auth-rollout.md` and run
-    `supabase/2026-08-06_secure_passwordless_auth.sql` last.
+    `supabase/2026-08-06_secure_passwordless_auth.sql`.
+10. Run `supabase/2026-08-07_reagent_checklists.sql` to add editable weekly
+    material lists, the seeded `VictorLab TC` responsibility list, and its
+    imported 2026-07-29 check.
+11. Run `supabase/2026-08-08_culture_media.sql` to add reusable culture-medium
+    recipes, dimensionally validated components, RLS, and auditing. See
+    `docs/culture-media.md` for supported formulas and units.
+12. Run `supabase/2026-08-09_set_admin_display_name.sql` to set the configured
+    administrator's app-visible name to `igorcramos`. This does not change the
+    login email or the GitHub Pages URL.
 
 ## Login options
 
@@ -70,6 +79,12 @@ Supabase Auth must allow this exact production URL for magic links. Keep `http:/
 - Allows optional photos in events.
 - Shows a quick overview of active cultures.
 - Tracks culture-reagent lots, barcodes/QR codes, alerts, catalog CSV imports, and purchase requests through receipt.
+- Creates editable reagent/material lists with assigned responsibility,
+  configurable frequency, weekly count history, and ordered flags without
+  changing physical stock automatically.
+- Creates and edits culture-medium recipes and scales dilutions, percentages,
+  mass/volume, volume/volume, and fixed-per-volume components without changing
+  reagent inventory.
 
 ## Security note
 
@@ -87,6 +102,6 @@ See `docs/schema-changes.md` for the recommended workflow and SQL examples.
 
 Use the language selector in the header to switch between English and Brazilian
 Portuguese. The preference is stored in the browser and applies to navigation,
-forms, authentication, inventory, scanning, alerts, purchasing, dates, and
-dynamic status messages. Laboratory product names, user-entered data, catalog
+forms, authentication, inventory, scanning, alerts, purchasing, culture-medium
+calculations, dates, and dynamic status messages. Laboratory product names, user-entered data, catalog
 identifiers, and database error details remain in their original form.

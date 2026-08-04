@@ -242,6 +242,167 @@
   margin-top: 8px;
 }
 
+.reagent-checklist-panel {
+  display: grid;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+.reagent-checklist-heading {
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.reagent-checklist-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reagent-checklist-toolbar label {
+  min-width: 210px;
+}
+
+.reagent-checklist-toolbar select {
+  min-height: 40px;
+}
+
+.reagent-checklist-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.reagent-checklist-metric {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-muted);
+}
+
+.reagent-checklist-metric span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.reagent-checklist-metric strong {
+  overflow-wrap: anywhere;
+}
+
+.reagent-checklist-metric.warning {
+  border-color: #ead0a5;
+  background: #fff8ec;
+}
+
+.reagent-checklist-metric.danger {
+  border-color: #e5bbbb;
+  background: #fff2f2;
+}
+
+.reagent-checklist-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.85fr) minmax(480px, 1.15fr);
+  gap: 18px;
+}
+
+.reagent-checklist-layout > section {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.reagent-checklist-layout .form-grid {
+  margin: 0;
+  background: var(--surface);
+}
+
+.reagent-checklist-item-list {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.reagent-checklist-item.is-inactive {
+  opacity: 0.62;
+}
+
+.reagent-weekly-check-meta {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.35fr) minmax(220px, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.reagent-weekly-grid {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.reagent-weekly-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.3fr) minmax(82px, 0.35fr) minmax(95px, 0.35fr) minmax(130px, 0.8fr);
+  align-items: end;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.reagent-weekly-row > div {
+  display: grid;
+  gap: 3px;
+  align-self: center;
+}
+
+.reagent-weekly-row > div span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.reagent-weekly-row label {
+  font-size: 0.72rem;
+}
+
+.reagent-weekly-row input {
+  min-height: 38px;
+  padding: 7px 8px;
+}
+
+.reagent-weekly-row .checkbox-label {
+  min-height: 38px;
+  align-self: end;
+}
+
+.reagent-check-history {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.reagent-check-history .compact-alert {
+  position: relative;
+  padding-right: 80px;
+}
+
+.reagent-check-history .text-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
 @media (max-width: 980px) {
   .reagent-operations-grid {
     grid-template-columns: 1fr 1fr;
@@ -252,6 +413,14 @@
   }
 
   .reagent-tools-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .reagent-checklist-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .reagent-checklist-layout {
     grid-template-columns: 1fr;
   }
 }
@@ -269,5 +438,21 @@
 
   .reagent-tools-layout {
     padding: 14px;
+  }
+
+  .reagent-checklist-summary,
+  .reagent-weekly-check-meta,
+  .reagent-weekly-row {
+    grid-template-columns: 1fr;
+  }
+
+  .reagent-checklist-toolbar,
+  .reagent-checklist-toolbar label {
+    width: 100%;
+  }
+
+  .reagent-checklist-toolbar .secondary-button,
+  .reagent-checklist-toolbar .danger-button {
+    flex: 1 1 140px;
   }
 }

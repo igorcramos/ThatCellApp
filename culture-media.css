@@ -1,0 +1,258 @@
+.media-workspace {
+  display: grid;
+  gap: 18px;
+}
+
+.media-recipe-toolbar,
+.media-calculator-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.media-recipe-picker {
+  display: grid;
+  gap: 5px;
+  min-width: min(360px, 100%);
+  flex: 1 1 320px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.media-recipe-picker select,
+.media-target-control input,
+.media-target-control select,
+.media-component-form select,
+.media-component-form input,
+.media-component-form textarea {
+  width: 100%;
+}
+
+.media-toolbar-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.media-recipe-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.media-summary-card {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-muted);
+}
+
+.media-summary-card span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.media-summary-card strong {
+  overflow-wrap: anywhere;
+}
+
+.media-editor {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.35fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.media-component-list {
+  display: grid;
+  gap: 10px;
+}
+
+.media-component-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.media-component-card.is-inactive {
+  opacity: 0.62;
+}
+
+.media-component-card p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.83rem;
+  line-height: 1.45;
+}
+
+.media-component-actions {
+  display: flex;
+  align-items: start;
+  gap: 5px;
+}
+
+.media-component-form {
+  position: sticky;
+  top: 12px;
+}
+
+.media-form-section {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.media-form-section .wide {
+  grid-column: 1 / -1;
+}
+
+.media-inline-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, 0.85fr);
+  gap: 8px;
+}
+
+.media-fieldset {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.media-fieldset legend {
+  padding: 0 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.media-fieldset p {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.media-calculator-toolbar {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.media-target-control {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(90px, auto);
+  gap: 8px;
+  min-width: min(300px, 100%);
+}
+
+.media-target-control > span {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.media-results-wrap {
+  overflow-x: auto;
+}
+
+.media-results {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+
+.media-results th,
+.media-results td {
+  padding: 11px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.media-results th {
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+}
+
+.media-result-error {
+  color: var(--danger);
+  font-weight: 750;
+}
+
+.media-result-formula {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.media-liquid-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.media-liquid-summary .media-summary-card.is-warning {
+  border-color: #e1a34c;
+  background: #fff4df;
+  color: #70460c;
+}
+
+.media-status {
+  min-height: 1.25em;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.media-status.is-error {
+  color: var(--danger);
+}
+
+@media (max-width: 880px) {
+  .media-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .media-component-form {
+    position: static;
+  }
+}
+
+@media (max-width: 620px) {
+  .media-recipe-summary,
+  .media-liquid-summary,
+  .media-form-section {
+    grid-template-columns: 1fr;
+  }
+
+  .media-form-section .wide {
+    grid-column: auto;
+  }
+
+  .media-toolbar-actions,
+  .media-toolbar-actions button,
+  .media-recipe-picker,
+  .media-target-control {
+    width: 100%;
+  }
+
+  .media-toolbar-actions button {
+    flex: 1 1 140px;
+  }
+}

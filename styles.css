@@ -171,16 +171,47 @@ h3 {
 
 .tabs {
   display: flex;
-  gap: 8px;
-  padding: 12px clamp(18px, 4vw, 44px);
+  align-items: stretch;
+  gap: 18px;
+  padding: 10px clamp(18px, 4vw, 44px) 12px;
   overflow-x: auto;
   border-bottom: 1px solid var(--line);
   background: var(--surface);
+  scrollbar-width: thin;
+}
+
+.nav-group {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 5px;
+}
+
+.nav-group + .nav-group {
+  padding-left: 18px;
+  border-left: 1px solid var(--line);
+}
+
+.nav-group-label {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.nav-group.has-active-tab .nav-group-label {
+  color: var(--accent-dark);
+}
+
+.nav-group-tabs {
+  display: flex;
+  gap: 6px;
 }
 
 .tab {
-  min-height: 42px;
-  padding: 0 16px;
+  min-height: 38px;
+  padding: 0 13px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--surface);
@@ -194,6 +225,11 @@ h3 {
   border-color: var(--accent);
   background: var(--accent);
   color: #ffffff;
+}
+
+.tab:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: 2px;
 }
 
 main {
@@ -1195,6 +1231,25 @@ button[aria-busy="true"]::after {
 }
 
 @media (max-width: 760px) {
+  .tabs {
+    gap: 12px;
+    padding-block: 9px 11px;
+    scroll-snap-type: x proximity;
+  }
+
+  .nav-group {
+    scroll-snap-align: start;
+  }
+
+  .nav-group + .nav-group {
+    padding-left: 12px;
+  }
+
+  .tab {
+    min-height: 40px;
+    padding-inline: 12px;
+  }
+
   .app-header,
   .section-heading,
   .panel-title-row {

@@ -3564,6 +3564,9 @@ function setActiveView(viewId) {
     item.setAttribute("aria-selected", String(isActive));
     item.tabIndex = isActive ? 0 : -1;
   });
+  document.querySelectorAll(".nav-group").forEach((group) => {
+    group.classList.toggle("has-active-tab", Boolean(group.querySelector('.tab[aria-selected="true"]')));
+  });
   document.querySelectorAll(".view").forEach((view) => {
     const isActive = view.id === viewId;
     view.classList.toggle("is-active", isActive);
