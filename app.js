@@ -269,7 +269,7 @@ function todayValue() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
-function addDays(dateValue, days) {
+function addDateValueDays(dateValue, days) {
   const date = new Date(`${dateValue}T12:00:00Z`);
   date.setUTCDate(date.getUTCDate() + Number(days || 0));
   return date.toISOString().slice(0, 10);
@@ -1775,7 +1775,7 @@ function buildRunSchedule(run) {
     .map((task) => {
       const protocolDay = Number(task.task_day);
       const runDay = adjustedRunDay(run.id, protocolDay);
-      return { ...task, kind: "task", protocol_day: protocolDay, task_day: runDay, date: addDays(run.day_zero_date, runDay) };
+      return { ...task, kind: "task", protocol_day: protocolDay, task_day: runDay, date: addDateValueDays(run.day_zero_date, runDay) };
     });
   const isMediumTask = (task) => hasMeaningfulProtocolValue(task.medium)
     || ["Media change", "Factor addition", "Replating"].includes(task.task_type);
@@ -1788,7 +1788,7 @@ function buildRunSchedule(run) {
   const maintenanceStartDay = adjustedRunDay(run.id, 31);
   const automaticChanges = [];
   for (let day = 3; day <= duration; day += 1) {
-    const date = addDays(run.day_zero_date, day);
+    const date = addDateValueDays(run.day_zero_date, day);
     const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
     const isMaintenancePhase = day > maintenanceStartDay;
     const preferredWeekdays = isMaintenancePhase ? [1, 4] : [1, 3, 5];
@@ -1805,7 +1805,7 @@ function buildRunSchedule(run) {
       ...deviation,
       kind: "deviation",
       task_day: markerDay,
-      date: addDays(run.day_zero_date, markerDay),
+      date: addDateValueDays(run.day_zero_date, markerDay),
       title: `Protocol deviation: ${deviationTypeLabel(deviation.deviation_type)}`,
       medium: null,
     };
@@ -3690,7 +3690,7 @@ function printableScheduleText(text) {
   return window.translateAppText?.(text) || text;
 }
 
-const SCHEDULE_ENGINE_VERSION = "2026.08.12.1";
+const SCHEDULE_ENGINE_VERSION = "2026.08.12.2";
 
 function printableScheduleMonthTitle(monthKey) {
   const locale = window.getAppLocale?.() || "en-US";
