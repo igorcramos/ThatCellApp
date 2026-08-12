@@ -1759,13 +1759,14 @@ function automaticMediumForDay(day) {
 
 function buildRunSchedule(run) {
   const tasks = state.protocolTasks
-    .filter((task) => task.protocol_id === run.protocol_id)
+    .filter((task) => task.protocol_id === run.protocol_id && String(task.title || "").trim() !== "-")
     .map((task) => {
       const protocolDay = Number(task.task_day);
       const runDay = adjustedRunDay(run.id, protocolDay);
       return { ...task, kind: "task", protocol_day: protocolDay, task_day: runDay, date: addDays(run.day_zero_date, runDay) };
     });
-  const isMediumTask = (task) => Boolean(task.medium)
+  const hasMeaningfulMedium = (value) => Boolean(value && String(value).trim() !== "-");
+  const isMediumTask = (task) => hasMeaningfulMedium(task.medium)
     || ["Media change", "Factor addition", "Replating"].includes(task.task_type);
   const explicitMediumDays = new Set(tasks.filter(isMediumTask).map((task) => Number(task.task_day)));
   const protocolDuration = state.differentiationProtocols.find((protocol) => protocol.id === run.protocol_id)?.expected_duration_days ?? 90;
@@ -1820,11 +1821,11 @@ function actionableScheduleItems(run) {
 
 function scheduleTaskHtml(run, item, compact = false) {
   const completedEvent = completionEventForItem(run, item);
-  const detail = item.medium || item.notes || "";
+  const detail = item.medium && String(item.medium).trim() !== "-" ? item.medium : item.notes || "";
   const protocolDayNote = item.protocol_day !== undefined && Number(item.protocol_day) !== Number(item.task_day) ? ` · protocol D${item.protocol_day}` : "";
   const overdue = !completedEvent && dateValueString(item.date) < todayValue();
   return `<article class="schedule-task ${completedEvent ? "is-complete" : ""} ${overdue ? "is-overdue" : ""}" style="--run-color:${escapeHtml(runScheduleColor(run))}">
-    <div class="schedule-task-actions"><button class="task-check" data-toggle-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-day="${escapeHtml(item.task_day)}" type="button" aria-label="${completedEvent ? "Mark task incomplete" : "Mark task complete"}" aria-pressed="${completedEvent ? "true" : "false"}">${completedEvent ? "✓" : ""}</button>${!completedEvent ? `<button class="task-defer-button" data-defer-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-day="${escapeHtml(item.task_day)}" type="button">Defer</button>` : ""}</div>
+    <div class="schedule-task-actions"><button class="task-check" data-toggle-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-day="${escapeHtml(item.task_day)}" type="button" aria-label="${completedEvent ? "Mark task incomplete" : "Mark task complete"}" aria-pressed="${completedEvent ? "true" : "false"}"><span aria-hidden="true">${completedEvent ? "✓" : ""}</span><em>${completedEvent ? "Completed" : "Complete"}</em></button>${!completedEvent ? `<button class="task-defer-button" data-defer-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-day="${escapeHtml(item.task_day)}" type="button">Defer / shift</button>` : ""}</div>
     <div>
       <div class="schedule-task-heading"><strong>${escapeHtml(item.title)}${overdue ? ' <em class="overdue-label">Overdue</em>' : ""}</strong>${compact ? `<span>${escapeHtml(formatDate(dateValueString(item.date)))}</span>` : `<span>${escapeHtml(formatDate(dateValueString(item.date)))} · run D${escapeHtml(item.task_day)}${escapeHtml(protocolDayNote)}</span>`}</div>
       ${detail ? `<p>${escapeHtml(detail)}</p>` : ""}
