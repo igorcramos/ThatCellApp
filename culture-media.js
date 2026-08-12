@@ -9,6 +9,7 @@ const cultureMediaState = {
 const cultureMediaEls = {
   recipeSelect: document.querySelector("#mediaRecipeSelect"),
   newRecipe: document.querySelector("#newMediaRecipe"),
+  duplicateRecipe: document.querySelector("#duplicateMediaRecipe"),
   editRecipe: document.querySelector("#editMediaRecipe"),
   deleteRecipe: document.querySelector("#deleteMediaRecipe"),
   recipeForm: document.querySelector("#mediaRecipeForm"),
@@ -335,7 +336,7 @@ function renderCultureMedia() {
     ? cultureMediaState.recipes.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(`${entry.name} · v${entry.version}`)}</option>`).join("")
     : `<option value="">${escapeHtml(cultureMediaTranslate("No culture media recipes"))}</option>`;
   cultureMediaEls.recipeSelect.value = recipe?.id || "";
-  [cultureMediaEls.editRecipe, cultureMediaEls.deleteRecipe, cultureMediaEls.newComponent].forEach((button) => {
+  [cultureMediaEls.editRecipe, cultureMediaEls.duplicateRecipe, cultureMediaEls.deleteRecipe, cultureMediaEls.newComponent].forEach((button) => {
     if (button) button.disabled = !recipe || !cultureMediaState.migrationAvailable;
   });
   if (cultureMediaEls.newRecipe) cultureMediaEls.newRecipe.disabled = !cultureMediaState.migrationAvailable;
@@ -391,7 +392,7 @@ function openCultureMediaRecipeForm(recipe = null) {
   form.elements.description.value = recipe?.description || "";
   form.elements.notes.value = recipe?.notes || "";
   form.elements.is_active.checked = recipe?.is_active ?? true;
-  form.querySelector("button[type='submit']").textContent = cultureMediaTranslate(recipe ? "Update recipe" : "Save recipe");
+  form.querySelector("button[type='submit']").textContent = cultureMediaTranslate(recipe ? "Update recipe" : "Save & add components");
   form.classList.remove("is-hidden");
   form.querySelector("input[name='name']").focus();
 }
@@ -429,11 +430,61 @@ async function handleCultureMediaRecipeSubmit(event) {
     showToast(`${cultureMediaTranslate("Could not save recipe")}: ${error.message}`);
     return;
   }
+  const created = !id;
   cultureMediaState.selectedRecipeId = saved.id;
   window.localStorage.setItem(cultureMediaStorageKey, saved.id);
   closeCultureMediaRecipeForm();
   showToast(cultureMediaTranslate(id ? "Recipe updated." : "Recipe created."));
   await loadCultureMedia();
+  if (created) openCultureMediaComponentForm();
+}
+
+async function duplicateSelectedCultureMediaRecipe() {
+  const recipe = selectedCultureMediaRecipe();
+  if (!recipe) return;
+  const sourceComponents = selectedCultureMediaComponents(true);
+  cultureMediaEls.duplicateRecipe.disabled = true;
+  const recipePayload = {
+    name: `${recipe.name} copy`,
+    version: recipe.version,
+    solvent_name: recipe.solvent_name,
+    description: recipe.description,
+    notes: recipe.notes,
+    is_active: true,
+    created_by: currentUserId(),
+  };
+  const { data: copy, error: recipeError } = await db.from("culture_media_recipes").insert(recipePayload).select().single();
+  if (recipeError) {
+    cultureMediaEls.duplicateRecipe.disabled = false;
+    showToast(`${cultureMediaTranslate("Could not duplicate recipe")}: ${recipeError.message}`);
+    return;
+  }
+  if (sourceComponents.length) {
+    const componentPayloads = sourceComponents.map((component) => ({
+      recipe_id: copy.id,
+      name: component.name,
+      calculation_mode: component.calculation_mode,
+      stock_value: component.stock_value,
+      stock_unit: component.stock_unit,
+      target_value: component.target_value,
+      target_unit: component.target_unit,
+      rate_value: component.rate_value,
+      rate_unit: component.rate_unit,
+      reference_value: component.reference_value,
+      reference_unit: component.reference_unit,
+      sort_order: component.sort_order,
+      is_active: component.is_active,
+      notes: component.notes,
+    }));
+    const { error: componentError } = await db.from("culture_media_components").insert(componentPayloads);
+    if (componentError) showToast(`${cultureMediaTranslate("Recipe copied, but components could not be copied")}: ${componentError.message}`);
+  }
+  cultureMediaState.selectedRecipeId = copy.id;
+  window.localStorage.setItem(cultureMediaStorageKey, copy.id);
+  cultureMediaEls.duplicateRecipe.disabled = false;
+  await loadCultureMedia();
+  openCultureMediaRecipeForm(selectedCultureMediaRecipe());
+  showToast(cultureMediaTranslate("Recipe duplicated. Rename or adjust the copy."));
 }
 
 async function deleteSelectedCultureMediaRecipe() {
@@ -490,7 +541,16 @@ function openCultureMediaComponentForm(component = null) {
   form.elements.sort_order.value = component?.sort_order ?? selectedCultureMediaComponents(true).length + 1;
   form.elements.notes.value = component?.notes || "";
   form.elements.is_active.checked = component?.is_active ?? true;
-  form.querySelector("button[type='submit']").textContent = cultureMediaTranslate(component ? "Update component" : "Add component");
+  const componentCount = selectedCultureMediaComponents(true).length;
+  const primarySubmit = form.querySelector("[data-component-next='another']");
+  const finishSubmit = form.querySelector("[data-component-next='finish']");
+  document.querySelector("#mediaComponentFormTitle").textContent = cultureMediaTranslate(component ? "Edit recipe component" : "Add recipe component");
+  document.querySelector("#mediaComponentProgress").textContent = cultureMediaTranslate(component
+    ? `Editing component ${Math.max(1, selectedCultureMediaComponents(true).findIndex((entry) => entry.id === component.id) + 1)} of ${componentCount}.`
+    : componentCount ? `${componentCount} component${componentCount === 1 ? "" : "s"} saved. Add the next one.` : "Enter the first component of this recipe.");
+  primarySubmit.textContent = cultureMediaTranslate(component ? "Update component" : "Save & add another");
+  primarySubmit.dataset.componentNext = component ? "finish" : "another";
+  finishSubmit.classList.toggle("is-hidden", Boolean(component));
   syncCultureMediaCalculationFields();
   form.classList.remove("is-hidden");
   form.querySelector("input[name='name']").focus();
@@ -547,6 +607,7 @@ async function handleCultureMediaComponentSubmit(event) {
   if (!selectedCultureMediaRecipe()) return;
   const data = new FormData(event.currentTarget);
   const id = valueOrNull(data.get("id"));
+  const nextAction = event.submitter?.dataset.componentNext || "finish";
   const payload = cultureMediaComponentPayload(data);
   const validationError = validateCultureMediaComponent(payload);
   if (validationError) {
@@ -563,9 +624,10 @@ async function handleCultureMediaComponentSubmit(event) {
     showToast(`${cultureMediaTranslate("Could not save component")}: ${error.message}`);
     return;
   }
-  closeCultureMediaComponentForm();
   showToast(cultureMediaTranslate(id ? "Component updated." : "Component added."));
   await loadCultureMedia();
+  if (!id && nextAction === "another") openCultureMediaComponentForm();
+  else closeCultureMediaComponentForm();
 }
 
 async function deleteCultureMediaComponent(componentId) {
@@ -590,6 +652,7 @@ cultureMediaEls.recipeSelect?.addEventListener("change", (event) => {
   renderCultureMedia();
 });
 cultureMediaEls.newRecipe?.addEventListener("click", () => openCultureMediaRecipeForm());
+cultureMediaEls.duplicateRecipe?.addEventListener("click", duplicateSelectedCultureMediaRecipe);
 cultureMediaEls.editRecipe?.addEventListener("click", () => openCultureMediaRecipeForm(selectedCultureMediaRecipe()));
 cultureMediaEls.deleteRecipe?.addEventListener("click", deleteSelectedCultureMediaRecipe);
 cultureMediaEls.recipeForm?.addEventListener("submit", handleCultureMediaRecipeSubmit);

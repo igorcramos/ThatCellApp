@@ -37,6 +37,35 @@
   flex-wrap: wrap;
 }
 
+.media-form-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.media-form-heading h3,
+.media-form-heading p {
+  margin: 0;
+}
+
+.media-form-heading p {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.media-step-badge {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
 .media-recipe-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
