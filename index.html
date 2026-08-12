@@ -911,6 +911,41 @@
               <button class="secondary-button" id="printRunSchedule" type="button">Export calendar</button>
             </div>
           </div>
+          <details class="protocol-deviation-panel">
+            <summary><span><strong>Protocol adjustments</strong><small>Document extra days, shortened phases, or other run-specific deviations.</small></span></summary>
+            <div class="protocol-deviation-content">
+              <div id="runDeviationSummary" class="run-deviation-summary"></div>
+              <form class="form-grid" id="runDeviationForm">
+                <label>
+                  Adjustment
+                  <select name="deviation_type" id="deviationTypeSelect">
+                    <option value="extra_day">Extra day in phase</option>
+                    <option value="shortened_phase">Shortened phase</option>
+                    <option value="other">Other documented deviation</option>
+                  </select>
+                </label>
+                <label>
+                  After protocol day
+                  <input name="after_protocol_day" type="number" step="1" required placeholder="Example: 10">
+                </label>
+                <label>
+                  Schedule shift (days)
+                  <input name="day_shift" id="deviationDayShift" type="number" min="-30" max="30" step="1" value="1" required>
+                </label>
+                <label class="wide">
+                  Reason
+                  <input name="reason" required placeholder="Example: Organoids needed one additional day before the next phase">
+                </label>
+                <label class="wide">
+                  Report notes
+                  <textarea name="notes" rows="2" placeholder="Observation, decision, approval, or expected impact"></textarea>
+                </label>
+                <div class="form-actions wide">
+                  <button class="primary-button" type="submit">Record deviation &amp; adjust schedule</button>
+                </div>
+              </form>
+            </div>
+          </details>
           <div id="runSchedule" class="run-schedule"></div>
         </div>
         <form class="form-grid" id="collectionForm">
@@ -1497,6 +1532,69 @@
         </div>
       </form>
     </dialog>
+    <dialog class="calendar-export-dialog late-task-dialog" id="lateTaskDialog" aria-labelledby="lateTaskTitle">
+      <form id="lateTaskForm">
+        <div class="calendar-export-heading">
+          <div>
+            <p class="eyebrow">Automatic deviation detection</p>
+            <h2 id="lateTaskTitle">Task completed off schedule</h2>
+            <p id="lateTaskSummary"></p>
+          </div>
+          <button class="icon-button" data-close-late-dialog type="button" aria-label="Close">&times;</button>
+        </div>
+        <fieldset class="late-task-options">
+          <legend>How should this affect the run?</legend>
+          <label class="late-task-option">
+            <input name="schedule_action" type="radio" value="keep" checked>
+            <span><strong>Record deviation — keep schedule</strong><small>Flag the late/early completion for the report without moving downstream tasks.</small></span>
+          </label>
+          <label class="late-task-option">
+            <input name="schedule_action" type="radio" value="shift">
+            <span><strong>Record deviation — shift downstream schedule</strong><small>Move all later protocol tasks by the detected number of days.</small></span>
+          </label>
+        </fieldset>
+        <label>
+          Reason for deviation
+          <input name="reason" required placeholder="Example: Morphology was not ready for the next phase">
+        </label>
+        <label>
+          Report notes
+          <textarea name="notes" rows="3" placeholder="Observation, decision, or expected impact"></textarea>
+        </label>
+        <div class="form-actions calendar-export-actions">
+          <button class="secondary-button" data-close-late-dialog type="button">Cancel</button>
+          <button class="primary-button" type="submit">Complete task &amp; record deviation</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog class="calendar-export-dialog late-task-dialog" id="deferTaskDialog" aria-labelledby="deferTaskTitle">
+      <form id="deferTaskForm">
+        <div class="calendar-export-heading">
+          <div>
+            <p class="eyebrow">Protocol adjustment</p>
+            <h2 id="deferTaskTitle">Defer task</h2>
+            <p id="deferTaskSummary"></p>
+          </div>
+          <button class="icon-button" data-close-defer-dialog type="button" aria-label="Close">&times;</button>
+        </div>
+        <label>
+          Additional days
+          <input name="day_shift" type="number" min="1" max="30" step="1" value="1" required>
+        </label>
+        <label>
+          Reason for deviation
+          <input name="reason" required placeholder="Example: Cells were not ready to aggregate">
+        </label>
+        <label>
+          Report notes
+          <textarea name="notes" rows="3" placeholder="Morphology, confluence, decision, or expected impact"></textarea>
+        </label>
+        <div class="form-actions calendar-export-actions">
+          <button class="secondary-button" data-close-defer-dialog type="button">Cancel</button>
+          <button class="primary-button" type="submit">Defer &amp; shift schedule</button>
+        </div>
+      </form>
+    </dialog>
     <section id="printSchedule" class="print-schedule" aria-hidden="true"></section>
 
     <script src="supabase-js.min.js?v=20260714a"></script>
@@ -1505,7 +1603,7 @@
     <script src="zxing-browser.min.js?v=0.2.0"></script>
     <script src="barcode-scanner.js?v=20260810a"></script>
     <script src="schedule-calendar.js?v=20260809a"></script>
-    <script src="app.js?v=20260810b"></script>
+    <script src="app.js?v=20260812a"></script>
     <script src="reagent-inventory.js?v=20260805b"></script>
     <script src="reagent-checklists.js?v=20260807a"></script>
     <script src="reagent-operations.js?v=20260810a"></script>

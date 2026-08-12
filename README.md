@@ -36,6 +36,11 @@ Simple web app for cell culture tracking using Supabase.
 12. Run `supabase/2026-08-09_set_admin_display_name.sql` to set the configured
     administrator's app-visible name to `igorcramos`. This does not change the
     login email or the GitHub Pages URL.
+13. Run `supabase/2026-08-10_differentiation_protocol_deviations.sql` to record
+    reportable run-specific protocol deviations and shift downstream schedules.
+14. Run `supabase/2026-08-11_automatic_deviation_detection.sql` so overdue or
+    early task completion is detected, linked to Activity, and optionally shifts
+    downstream protocol work.
 
 ## Login options
 

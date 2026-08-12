@@ -28,6 +28,7 @@ const state = {
   protocolTasks: [],
   differentiationRuns: [],
   differentiationRunCellLines: [],
+  differentiationRunDeviations: [],
   differentiationRunWells: [],
   differentiationEvents: [],
   signedPhotoUrls: new Map(),
@@ -113,6 +114,10 @@ const els = {
   protocolsList: document.querySelector("#protocolsList"),
   protocolTasksList: document.querySelector("#protocolTasksList"),
   differentiationRunsList: document.querySelector("#differentiationRunsList"),
+  runDeviationForm: document.querySelector("#runDeviationForm"),
+  runDeviationSummary: document.querySelector("#runDeviationSummary"),
+  deviationTypeSelect: document.querySelector("#deviationTypeSelect"),
+  deviationDayShift: document.querySelector("#deviationDayShift"),
   protocolImportInput: document.querySelector("#protocolImportInput"),
   scheduleRunSelect: document.querySelector("#scheduleRunSelect"),
   collectionRunSelect: document.querySelector("#collectionRunSelect"),
@@ -128,6 +133,12 @@ const els = {
   calendarRunCheckboxes: document.querySelector("#calendarRunCheckboxes"),
   calendarExportDialog: document.querySelector("#calendarExportDialog"),
   confirmCalendarExport: document.querySelector("#confirmCalendarExport"),
+  lateTaskDialog: document.querySelector("#lateTaskDialog"),
+  lateTaskForm: document.querySelector("#lateTaskForm"),
+  lateTaskSummary: document.querySelector("#lateTaskSummary"),
+  deferTaskDialog: document.querySelector("#deferTaskDialog"),
+  deferTaskForm: document.querySelector("#deferTaskForm"),
+  deferTaskSummary: document.querySelector("#deferTaskSummary"),
   eventsList: document.querySelector("#eventsList"),
   cultureCellLineCheckboxes: document.querySelector("#cultureCellLineCheckboxes"),
   vesselCultureSelect: document.querySelector("#vesselCultureSelect"),
@@ -241,6 +252,9 @@ const els = {
   customFluorescenceLabel: document.querySelector("#customFluorescenceLabel"),
 };
 
+let pendingOffScheduleCompletion = null;
+let pendingTaskDeferral = null;
+
 function valueOrNull(value) {
   const trimmed = typeof value === "string" ? value.trim() : value;
   return trimmed === "" ? null : trimmed;
@@ -251,7 +265,8 @@ function numberOrNull(value) {
 }
 
 function todayValue() {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
 function addDays(dateValue, days) {
@@ -1643,6 +1658,43 @@ function refreshNewDifferentiationBatchColor() {
   syncDifferentiationBatchColor(nextDifferentiationBatchColor());
 }
 
+function deviationsForRun(runId) {
+  return state.differentiationRunDeviations
+    .filter((deviation) => deviation.differentiation_run_id === runId)
+    .sort((a, b) => Number(a.after_protocol_day) - Number(b.after_protocol_day) || String(a.created_at || "").localeCompare(String(b.created_at || "")));
+}
+
+function deviationTypeLabel(type) {
+  return {
+    extra_day: "Extra day in phase",
+    shortened_phase: "Shortened phase",
+    other: "Other protocol deviation",
+  }[type] || "Protocol deviation";
+}
+
+function adjustedRunDay(runId, protocolDay) {
+  return Number(protocolDay) + deviationsForRun(runId)
+    .filter((deviation) => Number(protocolDay) > Number(deviation.after_protocol_day))
+    .reduce((total, deviation) => total + Number(deviation.day_shift || 0), 0);
+}
+
+function automaticMediumForRunDay(run, runDay) {
+  const thresholds = [31, 24, 17, 10, 3].map((protocolDay) => ({
+    protocolDay,
+    runDay: adjustedRunDay(run.id, protocolDay),
+  }));
+  const stage = thresholds.find((threshold) => runDay >= threshold.runDay)?.protocolDay;
+  return stage === undefined ? null : automaticMediumForDay(stage);
+}
+
+function protocolDeviationFlag(run) {
+  const deviations = deviationsForRun(run.id);
+  if (!deviations.length) return "";
+  const totalShift = deviations.reduce((total, deviation) => total + Number(deviation.day_shift || 0), 0);
+  const shiftText = totalShift === 0 ? "documented" : `${totalShift > 0 ? "+" : ""}${totalShift} day${Math.abs(totalShift) === 1 ? "" : "s"}`;
+  return `<span class="badge deviation-flag" title="This batch differs from its protocol template">⚑ Protocol deviation · ${escapeHtml(shiftText)}</span>`;
+}
+
 function renderDifferentiationRuns() {
   if (state.differentiationRuns.length === 0) {
     els.differentiationRunsList.innerHTML = '<div class="empty-state">No differentiation runs started yet.</div>';
@@ -1677,12 +1729,13 @@ function renderDifferentiationRuns() {
               <div class="task-preview">
                 ${scheduledTasks.map((task) => `
                   <div>
-                    <strong>${escapeHtml(`D${task.task_day}: ${task.title}`)}</strong>
-                    <span>${escapeHtml(formatEstimatedCompletion(run.day_zero_date, task.task_day, task.estimated_duration_hours) || "No estimate")}</span>
+                    <strong>${escapeHtml(`D${adjustedRunDay(run.id, task.task_day)}: ${task.title}${adjustedRunDay(run.id, task.task_day) !== Number(task.task_day) ? ` (protocol D${task.task_day})` : ""}`)}</strong>
+                    <span>${escapeHtml(formatEstimatedCompletion(run.day_zero_date, adjustedRunDay(run.id, task.task_day), task.estimated_duration_hours) || "No estimate")}</span>
                   </div>
                 `).join("")}
               </div>
             ` : ""}
+            ${deviationsForRun(run.id).length ? `<div class="run-deviation-callout">${protocolDeviationFlag(run)}<span>${escapeHtml(deviationsForRun(run.id).map((deviation) => `${deviationTypeLabel(deviation.deviation_type)} after D${deviation.after_protocol_day}: ${deviation.reason}`).join("; "))}</span></div>` : ""}
           </div>
           <div class="item-actions">
             <span class="badge differentiation-run-status">${escapeHtml(run.status || "active")}</span>
@@ -1707,35 +1760,52 @@ function automaticMediumForDay(day) {
 function buildRunSchedule(run) {
   const tasks = state.protocolTasks
     .filter((task) => task.protocol_id === run.protocol_id)
-    .map((task) => ({ ...task, kind: "task", date: addDays(run.day_zero_date, task.task_day) }));
+    .map((task) => {
+      const protocolDay = Number(task.task_day);
+      const runDay = adjustedRunDay(run.id, protocolDay);
+      return { ...task, kind: "task", protocol_day: protocolDay, task_day: runDay, date: addDays(run.day_zero_date, runDay) };
+    });
   const isMediumTask = (task) => Boolean(task.medium)
     || ["Media change", "Factor addition", "Replating"].includes(task.task_type);
   const explicitMediumDays = new Set(tasks.filter(isMediumTask).map((task) => Number(task.task_day)));
-  const duration = state.differentiationProtocols.find((protocol) => protocol.id === run.protocol_id)?.expected_duration_days ?? 90;
+  const protocolDuration = state.differentiationProtocols.find((protocol) => protocol.id === run.protocol_id)?.expected_duration_days ?? 90;
+  const duration = adjustedRunDay(run.id, protocolDuration);
+  const maintenanceStartDay = adjustedRunDay(run.id, 31);
   const automaticChanges = [];
   for (let day = 3; day <= duration; day += 1) {
     const date = addDays(run.day_zero_date, day);
     const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
-    const isMaintenancePhase = day > 31;
+    const isMaintenancePhase = day > maintenanceStartDay;
     const preferredWeekdays = isMaintenancePhase ? [1, 4] : [1, 3, 5];
     const isPreferredDay = preferredWeekdays.includes(weekday);
     const adjacentToExplicitChange = explicitMediumDays.has(day - 1) || explicitMediumDays.has(day + 1);
     const adjacentToAutomaticChange = automaticChanges.some((change) => Math.abs(change.task_day - day) <= 1);
     if (isPreferredDay && !explicitMediumDays.has(day) && !adjacentToExplicitChange && !adjacentToAutomaticChange) {
-      automaticChanges.push({ kind: "automatic", task_day: day, date, title: day >= 31 ? "Maintenance medium change" : "Medium change", medium: automaticMediumForDay(day) });
+      automaticChanges.push({ kind: "automatic", task_day: day, date, title: isMaintenancePhase ? "Maintenance medium change" : "Medium change", medium: automaticMediumForRunDay(run, day) });
     }
   }
+  const deviations = deviationsForRun(run.id).map((deviation) => {
+    const markerDay = adjustedRunDay(run.id, Number(deviation.after_protocol_day)) + 1;
+    return {
+      ...deviation,
+      kind: "deviation",
+      task_day: markerDay,
+      date: addDays(run.day_zero_date, markerDay),
+      title: `Protocol deviation: ${deviationTypeLabel(deviation.deviation_type)}`,
+      medium: null,
+    };
+  });
   const collections = state.differentiationEvents
     .filter((event) => event.differentiation_run_id === run.id && event.event_type === "Collection")
     .map((event) => ({ ...event, kind: "collection", task_day: event.event_day ?? protocolDayForDate(run.day_zero_date, event.event_date), date: dateValueString(event.event_date), title: event.experiment || "Collection" }));
-  return [...tasks, ...automaticChanges, ...collections].sort((a, b) => dateValueString(a.date).localeCompare(dateValueString(b.date)) || (a.kind === "collection" ? 1 : -1));
+  return [...tasks, ...automaticChanges, ...deviations, ...collections].sort((a, b) => dateValueString(a.date).localeCompare(dateValueString(b.date)) || (a.kind === "collection" ? 1 : -1));
 }
 
 function completionEventForItem(run, item) {
   return state.differentiationEvents.find((event) => {
     if (event.differentiation_run_id !== run.id) return false;
     if (item.kind === "task" && item.id) return event.protocol_task_id === item.id;
-    if (item.kind === "automatic") return event.event_day === item.task_day && event.event_type === "Media change" && event.scheduled_title === item.title;
+    if (item.kind === "automatic") return Number(event.scheduled_run_day ?? event.event_day) === Number(item.task_day) && event.event_type === "Media change" && event.scheduled_title === item.title;
     return false;
   });
 }
@@ -1745,16 +1815,18 @@ function runScheduleColor(run) {
 }
 
 function actionableScheduleItems(run) {
-  return buildRunSchedule(run).filter((item) => item.kind !== "collection");
+  return buildRunSchedule(run).filter((item) => item.kind === "task" || item.kind === "automatic");
 }
 
 function scheduleTaskHtml(run, item, compact = false) {
   const completedEvent = completionEventForItem(run, item);
   const detail = item.medium || item.notes || "";
-  return `<article class="schedule-task ${completedEvent ? "is-complete" : ""}" style="--run-color:${escapeHtml(runScheduleColor(run))}">
-    <button class="task-check" data-toggle-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-day="${escapeHtml(item.task_day)}" type="button" aria-label="${completedEvent ? "Mark task incomplete" : "Mark task complete"}" aria-pressed="${completedEvent ? "true" : "false"}">${completedEvent ? "✓" : ""}</button>
+  const protocolDayNote = item.protocol_day !== undefined && Number(item.protocol_day) !== Number(item.task_day) ? ` · protocol D${item.protocol_day}` : "";
+  const overdue = !completedEvent && dateValueString(item.date) < todayValue();
+  return `<article class="schedule-task ${completedEvent ? "is-complete" : ""} ${overdue ? "is-overdue" : ""}" style="--run-color:${escapeHtml(runScheduleColor(run))}">
+    <div class="schedule-task-actions"><button class="task-check" data-toggle-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-day="${escapeHtml(item.task_day)}" type="button" aria-label="${completedEvent ? "Mark task incomplete" : "Mark task complete"}" aria-pressed="${completedEvent ? "true" : "false"}">${completedEvent ? "✓" : ""}</button>${!completedEvent ? `<button class="task-defer-button" data-defer-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-day="${escapeHtml(item.task_day)}" type="button">Defer</button>` : ""}</div>
     <div>
-      <div class="schedule-task-heading"><strong>${escapeHtml(item.title)}</strong>${compact ? "" : `<span>${escapeHtml(formatDate(dateValueString(item.date)))} · D${escapeHtml(item.task_day)}</span>`}</div>
+      <div class="schedule-task-heading"><strong>${escapeHtml(item.title)}${overdue ? ' <em class="overdue-label">Overdue</em>' : ""}</strong>${compact ? `<span>${escapeHtml(formatDate(dateValueString(item.date)))}</span>` : `<span>${escapeHtml(formatDate(dateValueString(item.date)))} · run D${escapeHtml(item.task_day)}${escapeHtml(protocolDayNote)}</span>`}</div>
       ${detail ? `<p>${escapeHtml(detail)}</p>` : ""}
       <small>${escapeHtml(differentiationRunLabel(run))}</small>
     </div>
@@ -1765,7 +1837,11 @@ function renderTodayDifferentiationTasks() {
   const today = todayValue();
   const due = state.differentiationRuns
     .filter((run) => run.status === "active")
-    .flatMap((run) => actionableScheduleItems(run).filter((item) => dateValueString(item.date) === today).map((item) => ({ run, item })));
+    .flatMap((run) => actionableScheduleItems(run).filter((item) => {
+      const plannedDate = dateValueString(item.date);
+      return plannedDate === today || (plannedDate < today && !completionEventForItem(run, item));
+    }).map((item) => ({ run, item })))
+    .sort((a, b) => dateValueString(a.item.date).localeCompare(dateValueString(b.item.date)));
   els.todayDifferentiationTasks.innerHTML = due.length
     ? due.map(({ run, item }) => scheduleTaskHtml(run, item, true)).join("")
     : '<div class="empty-state">No differentiation tasks scheduled for today.</div>';
@@ -1780,24 +1856,39 @@ function renderCalendarRunFilters() {
     : '<div class="empty-state">No active batches have scheduled activities.</div>';
 }
 
+function renderRunDeviationSummary(run) {
+  const deviations = run ? deviationsForRun(run.id) : [];
+  if (!run) {
+    els.runDeviationSummary.innerHTML = '<div class="empty-state">Start a differentiation before recording adjustments.</div>';
+    els.runDeviationForm.querySelectorAll("input, select, textarea, button").forEach((control) => { control.disabled = true; });
+    return;
+  }
+  els.runDeviationForm.querySelectorAll("input, select, textarea, button").forEach((control) => { control.disabled = false; });
+  els.runDeviationSummary.innerHTML = deviations.length
+    ? `<div class="deviation-summary-header">${protocolDeviationFlag(run)}<strong>${deviations.length} recorded adjustment${deviations.length === 1 ? "" : "s"}</strong></div>${deviations.map((deviation) => `<article class="deviation-record"><div><strong>${escapeHtml(deviationTypeLabel(deviation.deviation_type))}${deviation.detection_source === "automatic" ? ' <em class="auto-detected-label">Auto-detected</em>' : ""}</strong><span>After protocol D${escapeHtml(deviation.after_protocol_day)} · ${Number(deviation.day_shift) > 0 ? "+" : ""}${escapeHtml(deviation.day_shift)} schedule day${Math.abs(Number(deviation.day_shift)) === 1 ? "" : "s"}${deviation.planned_date && deviation.performed_date ? ` · planned ${escapeHtml(formatDate(deviation.planned_date))}, performed ${escapeHtml(formatDate(deviation.performed_date))}` : ""}</span><p>${escapeHtml(deviation.reason)}</p>${deviation.notes ? `<small>${escapeHtml(deviation.notes)}</small>` : ""}</div><button class="icon-button danger-button" data-delete-run-deviation="${deviation.id}" type="button" title="Delete deviation" aria-label="Delete deviation">&#128465;</button></article>`).join("")}`
+    : '<div class="empty-state">No protocol deviations recorded for this batch.</div>';
+}
+
 function renderRunSchedule() {
   const run = state.differentiationRuns.find((item) => item.id === els.scheduleRunSelect?.value) || state.differentiationRuns[0];
   if (!run) {
     els.runSchedule.innerHTML = '<div class="empty-state">Start a differentiation to generate its schedule.</div>';
+    renderRunDeviationSummary(null);
     return;
   }
   if (els.scheduleRunSelect.value !== run.id) els.scheduleRunSelect.value = run.id;
   const today = todayValue();
   const schedule = buildRunSchedule(run);
+  renderRunDeviationSummary(run);
   els.runSchedule.innerHTML = schedule.map((item) => {
-    if (item.kind !== "collection") return scheduleTaskHtml(run, item);
+    if (item.kind === "task" || item.kind === "automatic") return scheduleTaskHtml(run, item);
     const itemDate = dateValueString(item.date);
     const stateClass = itemDate === today ? "is-today" : itemDate < today ? "is-past" : "";
-    const kindLabel = item.kind === "automatic" ? "Auto-scheduled" : item.kind === "collection" ? "Collection" : item.task_type || "Protocol task";
+    const kindLabel = item.kind === "deviation" ? "Protocol deviation" : item.kind === "collection" ? "Collection" : item.task_type || "Protocol task";
     const detail = item.kind === "collection"
       ? [item.quantity, item.notes].filter(Boolean).join(" · ")
-      : item.medium || item.notes;
-    return `<article class="schedule-row ${stateClass}">
+      : [item.reason, item.notes].filter(Boolean).join(" · ");
+    return `<article class="schedule-row ${stateClass} ${item.kind === "deviation" ? "is-deviation" : ""}">
       <div class="schedule-date"><strong>${escapeHtml(formatDate(itemDate))}</strong><span>D${item.task_day}</span></div>
       <div><span class="schedule-kind">${escapeHtml(kindLabel)}</span><h4>${escapeHtml(item.title)}</h4>${detail ? `<p>${escapeHtml(detail)}</p>` : ""}</div>
     </article>`;
@@ -2178,6 +2269,7 @@ function clearData() {
   state.protocolTasks = [];
   state.differentiationRuns = [];
   state.differentiationRunCellLines = [];
+  state.differentiationRunDeviations = [];
   state.differentiationRunWells = [];
   state.differentiationEvents = [];
   state.signedPhotoUrls = new Map();
@@ -2441,14 +2533,15 @@ async function loadAllInternal() {
       .from("differentiation_run_wells")
       .select("*"),
     db.from("differentiation_run_cell_lines").select("*"),
+    db.from("differentiation_run_deviations").select("*").order("created_at", { ascending: true }),
     db
       .from("differentiation_events")
       .select("*")
       .order("event_date", { ascending: false })
       .order("created_at", { ascending: false }),
   ];
-  const moduleLabels = ["Projects", "Plates", "Well maps", "Plate cultures", "Culture cell lines", "Cryoboxes", "Cryovials", "Protocols", "Protocol tasks", "Differentiations", "Differentiation wells", "Differentiation cell lines", "Differentiation activity"];
-  const [projectsResult, vesselsResult, wellsResult, vesselCulturesResult, cultureCellLinesResult, cryoBoxesResult, cryoVialsResult, protocolsResult, protocolTasksResult, differentiationRunsResult, differentiationRunWellsResult, differentiationRunCellLinesResult, differentiationEventsResult] = await Promise.all(
+  const moduleLabels = ["Projects", "Plates", "Well maps", "Plate cultures", "Culture cell lines", "Cryoboxes", "Cryovials", "Protocols", "Protocol tasks", "Differentiations", "Differentiation wells", "Differentiation cell lines", "Protocol deviations", "Differentiation activity"];
+  const [projectsResult, vesselsResult, wellsResult, vesselCulturesResult, cultureCellLinesResult, cryoBoxesResult, cryoVialsResult, protocolsResult, protocolTasksResult, differentiationRunsResult, differentiationRunWellsResult, differentiationRunCellLinesResult, differentiationRunDeviationsResult, differentiationEventsResult] = await Promise.all(
     moduleRequests.map((request, index) => moduleRequest(moduleLabels[index], request))
   );
 
@@ -2488,6 +2581,7 @@ async function loadAllInternal() {
   refreshNewDifferentiationBatchColor();
   state.differentiationRunWells = differentiationTablesMissing ? [] : differentiationRunWellsResult.data || [];
   state.differentiationRunCellLines = differentiationTablesMissing ? [] : differentiationRunCellLinesResult.data || [];
+  state.differentiationRunDeviations = differentiationRunDeviationsResult.error ? [] : differentiationRunDeviationsResult.data || [];
   state.differentiationEvents = differentiationTablesMissing ? [] : differentiationEventsResult.data || [];
   await refreshSignedPhotoUrls();
   if (state.selectedVesselId && !state.vessels.some((vessel) => vessel.id === state.selectedVesselId)) {
@@ -2500,7 +2594,7 @@ async function loadAllInternal() {
   const loadIssues = [...baseLabels.map((_, index) => loadIssueFor([
     profileResult, profilesResult, projectMembersResult, cultureMembersResult, cellLinesResult, culturesResult, eventsResult,
   ][index])), ...moduleLabels.map((_, index) => loadIssueFor([
-    projectsResult, vesselsResult, wellsResult, vesselCulturesResult, cultureCellLinesResult, cryoBoxesResult, cryoVialsResult, protocolsResult, protocolTasksResult, differentiationRunsResult, differentiationRunWellsResult, differentiationRunCellLinesResult, differentiationEventsResult,
+    projectsResult, vesselsResult, wellsResult, vesselCulturesResult, cultureCellLinesResult, cryoBoxesResult, cryoVialsResult, protocolsResult, protocolTasksResult, differentiationRunsResult, differentiationRunWellsResult, differentiationRunCellLinesResult, differentiationRunDeviationsResult, differentiationEventsResult,
   ][index]))].filter(Boolean);
   showLoadIssues(loadIssues);
   if (batchCellLineTablesMissing) {
@@ -3388,6 +3482,44 @@ async function handleCollectionSubmit(event) {
   await loadAll();
 }
 
+async function handleRunDeviationSubmit(event) {
+  event.preventDefault();
+  if (!ensureDb()) return;
+  const run = state.differentiationRuns.find((item) => item.id === els.scheduleRunSelect.value);
+  if (!run) return showToast("Choose a differentiation run first.");
+  const data = new FormData(event.currentTarget);
+  const deviationType = valueOrNull(data.get("deviation_type")) || "extra_day";
+  const dayShift = numberOrNull(data.get("day_shift")) ?? 0;
+  if (deviationType === "extra_day" && dayShift <= 0) return showToast("An extra day must use a positive schedule shift.");
+  if (deviationType === "shortened_phase" && dayShift >= 0) return showToast("A shortened phase must use a negative schedule shift.");
+  const payload = {
+    differentiation_run_id: run.id,
+    deviation_type: deviationType,
+    after_protocol_day: numberOrNull(data.get("after_protocol_day")),
+    day_shift: dayShift,
+    reason: valueOrNull(data.get("reason")),
+    notes: valueOrNull(data.get("notes")),
+  };
+  const submit = event.currentTarget.querySelector("button[type='submit']");
+  submit.disabled = true;
+  const { error } = await db.from("differentiation_run_deviations").insert(payload);
+  submit.disabled = false;
+  if (error) return showToast(`Error recording protocol deviation: ${error.message}`);
+  event.currentTarget.reset();
+  els.deviationDayShift.value = "1";
+  showToast("Protocol deviation flagged and the run schedule was adjusted.");
+  await loadAll();
+}
+
+async function deleteRunDeviation(deviationId) {
+  if (!deviationId || !ensureDb()) return;
+  if (!window.confirm("Delete this protocol deviation? The downstream schedule will move back accordingly.")) return;
+  const { error } = await db.from("differentiation_run_deviations").delete().eq("id", deviationId);
+  if (error) return showToast(`Error deleting protocol deviation: ${error.message}`);
+  showToast("Protocol deviation deleted and the schedule was recalculated.");
+  await loadAll();
+}
+
 async function toggleScheduledTask(button) {
   if (!ensureDb()) return;
   const run = state.differentiationRuns.find((item) => item.id === button.dataset.toggleScheduleTask);
@@ -3409,27 +3541,134 @@ async function toggleScheduledTask(button) {
       return;
     }
     showToast("Task reopened and removed from Activity.");
-  } else {
-    const payload = {
+    await loadAll();
+    return;
+  }
+  button.disabled = false;
+  const plannedDate = dateValueString(item.date);
+  const actualDate = todayValue();
+  const dayDifference = protocolDayForDate(plannedDate, actualDate);
+  if (dayDifference !== 0) {
+    pendingOffScheduleCompletion = { run, item, plannedDate, actualDate, dayDifference };
+    const timing = dayDifference > 0
+      ? `${dayDifference} day${dayDifference === 1 ? "" : "s"} late`
+      : `${Math.abs(dayDifference)} day${Math.abs(dayDifference) === 1 ? "" : "s"} early`;
+    els.lateTaskSummary.textContent = `${item.title} was planned for ${formatDate(plannedDate)} and is being completed on ${formatDate(actualDate)} (${timing}).`;
+    els.lateTaskForm.reset();
+    els.lateTaskDialog.showModal();
+    return;
+  }
+  await completeScheduledTask(run, item, { actualDate });
+}
+
+function openTaskDeferral(button) {
+  const run = state.differentiationRuns.find((item) => item.id === button.dataset.deferScheduleTask);
+  if (!run) return;
+  const taskDay = Number(button.dataset.taskDay);
+  const item = actionableScheduleItems(run).find((candidate) =>
+    candidate.kind === button.dataset.taskKind &&
+    Number(candidate.task_day) === taskDay &&
+    (!button.dataset.taskId || candidate.id === button.dataset.taskId)
+  );
+  if (!item) return;
+  pendingTaskDeferral = { run, item };
+  els.deferTaskForm.reset();
+  els.deferTaskForm.elements.day_shift.value = "1";
+  els.deferTaskSummary.textContent = `${item.title} is scheduled for ${formatDate(dateValueString(item.date))}. Deferring it will move this task and all later protocol tasks.`;
+  els.deferTaskDialog.showModal();
+}
+
+async function handleDeferTaskSubmit(event) {
+  event.preventDefault();
+  if (!pendingTaskDeferral || !ensureDb()) return;
+  const data = new FormData(event.currentTarget);
+  const dayShift = numberOrNull(data.get("day_shift"));
+  const reason = valueOrNull(data.get("reason"));
+  if (!dayShift || dayShift < 1) return showToast("Enter at least one additional day.");
+  if (!reason) return showToast("Enter the reason for the protocol deviation.");
+  const { run, item } = pendingTaskDeferral;
+  const protocolDay = Number(item.protocol_day ?? item.task_day);
+  const payload = {
+    differentiation_run_id: run.id,
+    protocol_task_id: item.kind === "task" ? item.id : null,
+    deviation_type: "extra_day",
+    after_protocol_day: protocolDay - 1,
+    day_shift: dayShift,
+    reason,
+    notes: valueOrNull(data.get("notes")),
+    planned_date: dateValueString(item.date),
+    detection_source: "automatic",
+  };
+  const { error } = await db.from("differentiation_run_deviations").insert(payload);
+  if (error) return showToast(`Error deferring task: ${error.message}`);
+  els.deferTaskDialog.close();
+  pendingTaskDeferral = null;
+  showToast(`Task deferred by ${dayShift} day${dayShift === 1 ? "" : "s"}; protocol deviation flagged.`);
+  await loadAll();
+}
+
+async function completeScheduledTask(run, item, { actualDate, deviation = null }) {
+  const actualRunDay = protocolDayForDate(run.day_zero_date, actualDate);
+  const activityPayload = {
+    differentiation_run_id: run.id,
+    protocol_task_id: item.kind === "task" ? item.id : null,
+    event_date: actualDate,
+    event_day: actualRunDay,
+    scheduled_run_day: item.task_day,
+    event_type: item.kind === "automatic" ? "Media change" : item.task_type || "Other",
+    scheduled_title: item.title,
+    medium: item.medium || null,
+    notes: item.notes || null,
+    performed_by: profileName(state.profile),
+  };
+  const { data: activity, error: activityError } = await db.from("differentiation_events").insert(activityPayload).select("id").single();
+  if (activityError) return showToast(`Error completing task: ${activityError.message}`);
+
+  if (deviation) {
+    const deviationPayload = {
       differentiation_run_id: run.id,
+      differentiation_event_id: activity.id,
       protocol_task_id: item.kind === "task" ? item.id : null,
-      event_date: dateValueString(item.date),
-      event_day: item.task_day,
-      event_type: item.kind === "automatic" ? "Media change" : item.task_type || "Other",
-      scheduled_title: item.title,
-      medium: item.medium || null,
-      notes: item.notes || null,
-      performed_by: profileName(state.profile),
+      deviation_type: deviation.dayShift > 0 ? "extra_day" : deviation.dayShift < 0 ? "shortened_phase" : "other",
+      after_protocol_day: Number(item.protocol_day ?? item.task_day),
+      day_shift: deviation.dayShift,
+      reason: deviation.reason,
+      notes: deviation.notes,
+      planned_date: deviation.plannedDate,
+      performed_date: actualDate,
+      detection_source: "automatic",
     };
-    const { error } = await db.from("differentiation_events").insert(payload);
-    if (error) {
-      button.disabled = false;
-      showToast(`Error completing task: ${error.message}`);
-      return;
+    const { error: deviationError } = await db.from("differentiation_run_deviations").insert(deviationPayload);
+    if (deviationError) {
+      await db.from("differentiation_events").delete().eq("id", activity.id);
+      return showToast(`Task was not completed because the deviation could not be recorded: ${deviationError.message}`);
     }
+    showToast(deviation.dayShift === 0
+      ? "Task completed off schedule and flagged; downstream schedule was kept."
+      : "Task completed off schedule and flagged; downstream schedule was shifted.");
+  } else {
     showToast("Task completed and recorded in Activity.");
   }
   await loadAll();
+}
+
+async function handleLateTaskSubmit(event) {
+  event.preventDefault();
+  if (!pendingOffScheduleCompletion) return;
+  const data = new FormData(event.currentTarget);
+  const scheduleAction = data.get("schedule_action") || "keep";
+  const reason = valueOrNull(data.get("reason"));
+  if (!reason) return showToast("Enter the reason for the protocol deviation.");
+  const pending = pendingOffScheduleCompletion;
+  const deviation = {
+    dayShift: scheduleAction === "shift" ? pending.dayDifference : 0,
+    reason,
+    notes: valueOrNull(data.get("notes")),
+    plannedDate: pending.plannedDate,
+  };
+  els.lateTaskDialog.close();
+  pendingOffScheduleCompletion = null;
+  await completeScheduledTask(pending.run, pending.item, { actualDate: pending.actualDate, deviation });
 }
 
 function printableScheduleText(text) {
@@ -3454,9 +3693,11 @@ function printableScheduleWeekdays() {
 }
 
 function printableScheduleEntryHtml({ run, item }) {
-  const detail = item.medium || [item.quantity, item.notes].filter(Boolean).join(" · ");
+  const detail = item.kind === "deviation"
+    ? [item.reason, item.notes].filter(Boolean).join(" · ")
+    : item.medium || [item.quantity, item.notes].filter(Boolean).join(" · ");
   const title = printableScheduleText(item.title || item.experiment || "Collection");
-  return `<div class="print-calendar-event" style="--run-color:${escapeHtml(runScheduleColor(run))}">
+  return `<div class="print-calendar-event ${item.kind === "deviation" ? "is-deviation" : ""}" style="--run-color:${escapeHtml(runScheduleColor(run))}">
     <div><strong>${escapeHtml(run.run_name)}</strong><span>D${escapeHtml(item.task_day)}</span></div>
     <h3>${escapeHtml(title)}</h3>
     ${detail ? `<p>${escapeHtml(detail)}</p>` : ""}
@@ -3474,7 +3715,7 @@ function printableScheduleHtml(runs) {
   const weekdays = printableScheduleWeekdays();
   return months.map((month) => {
     const monthRunIds = new Set(month.cells.filter(Boolean).flatMap((cell) => cell.entries.map((entry) => entry.run.id)));
-    const legend = scheduledRuns.filter((run) => monthRunIds.has(run.id)).map((run) => `<span style="--run-color:${escapeHtml(runScheduleColor(run))}"><i></i>${escapeHtml(differentiationRunLabel(run))}</span>`).join("");
+    const legend = scheduledRuns.filter((run) => monthRunIds.has(run.id)).map((run) => `<span style="--run-color:${escapeHtml(runScheduleColor(run))}"><i></i>${deviationsForRun(run.id).length ? "⚑ " : ""}${escapeHtml(differentiationRunLabel(run))}</span>`).join("");
     return `<section class="print-month" style="--calendar-weeks:${month.weeks}">
     <header class="print-month-header">
       <div><p>${escapeHtml(printableScheduleText("Monthly differentiation calendar"))}</p><h1>${escapeHtml(printableScheduleMonthTitle(month.key))}</h1><small>${escapeHtml(printableScheduleText("Generated"))} ${escapeHtml(formatDate(todayValue()))}</small></div>
@@ -3879,12 +4120,22 @@ function setupForms() {
   bindBusyForm(els.protocolTaskForm, handleProtocolTaskSubmit);
   bindBusyForm(els.differentiationRunForm, handleDifferentiationRunSubmit);
   bindBusyForm(els.collectionForm, handleCollectionSubmit);
+  bindBusyForm(els.runDeviationForm, handleRunDeviationSubmit);
+  bindBusyForm(els.lateTaskForm, handleLateTaskSubmit);
+  bindBusyForm(els.deferTaskForm, handleDeferTaskSubmit);
   bindBusyForm(els.eventForm, handleEventSubmit);
   els.historyProjectFilter.addEventListener("change", renderEvents);
   els.historyCultureFilter.addEventListener("change", renderEvents);
   els.protocolTaskProjectFilter.addEventListener("change", renderProtocolTasks);
   els.protocolImportInput.addEventListener("change", handleProtocolImport);
   els.scheduleRunSelect.addEventListener("change", renderRunSchedule);
+  els.deviationTypeSelect.addEventListener("change", () => {
+    els.deviationDayShift.value = els.deviationTypeSelect.value === "extra_day" ? "1" : els.deviationTypeSelect.value === "shortened_phase" ? "-1" : "0";
+  });
+  els.runDeviationSummary.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-delete-run-deviation]");
+    if (button) deleteRunDeviation(button.dataset.deleteRunDeviation);
+  });
   els.collectionRunSelect.addEventListener("change", () => {
     const run = state.differentiationRuns.find((item) => item.id === els.collectionRunSelect.value);
     if (run && els.collectionDate.value) els.collectionDay.value = protocolDayForDate(run.day_zero_date, els.collectionDate.value);
@@ -3912,10 +4163,22 @@ function setupForms() {
     els.calendarExportDialog.close();
     printSchedules(false);
   });
+  els.lateTaskDialog.querySelectorAll("[data-close-late-dialog]").forEach((button) => button.addEventListener("click", () => {
+    pendingOffScheduleCompletion = null;
+    els.lateTaskDialog.close();
+  }));
+  els.lateTaskDialog.addEventListener("cancel", () => { pendingOffScheduleCompletion = null; });
+  els.deferTaskDialog.querySelectorAll("[data-close-defer-dialog]").forEach((button) => button.addEventListener("click", () => {
+    pendingTaskDeferral = null;
+    els.deferTaskDialog.close();
+  }));
+  els.deferTaskDialog.addEventListener("cancel", () => { pendingTaskDeferral = null; });
   els.printRunSchedule.addEventListener("click", () => printSchedules(true));
   [els.todayDifferentiationTasks, els.runSchedule].forEach((container) => container.addEventListener("click", (event) => {
     const button = event.target.closest("[data-toggle-schedule-task]");
     if (button) toggleScheduledTask(button);
+    const deferButton = event.target.closest("[data-defer-schedule-task]");
+    if (deferButton) openTaskDeferral(deferButton);
   }));
   els.addPlateButton.addEventListener("click", openPlateForm);
   els.addPlateSetup.addEventListener("click", () => addPlateSetupRow());
