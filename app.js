@@ -1757,19 +1757,33 @@ function automaticMediumForDay(day) {
   return null;
 }
 
+function hasMeaningfulProtocolValue(value) {
+  const normalized = String(value || "").trim();
+  return Boolean(normalized && !["-", "–", "—"].includes(normalized));
+}
+
+function carriedForwardMedium(tasks, runDay) {
+  return tasks
+    .filter((task) => Number(task.task_day) <= Number(runDay) && hasMeaningfulProtocolValue(task.medium))
+    .sort((a, b) => Number(b.task_day) - Number(a.task_day))[0]?.medium || null;
+}
+
 function buildRunSchedule(run) {
-  const tasks = state.protocolTasks
-    .filter((task) => task.protocol_id === run.protocol_id && String(task.title || "").trim() !== "-")
+  const allProtocolTasks = state.protocolTasks.filter((task) => task.protocol_id === run.protocol_id);
+  const tasks = allProtocolTasks
+    .filter((task) => hasMeaningfulProtocolValue(task.title))
     .map((task) => {
       const protocolDay = Number(task.task_day);
       const runDay = adjustedRunDay(run.id, protocolDay);
       return { ...task, kind: "task", protocol_day: protocolDay, task_day: runDay, date: addDays(run.day_zero_date, runDay) };
     });
-  const hasMeaningfulMedium = (value) => Boolean(value && String(value).trim() !== "-");
-  const isMediumTask = (task) => hasMeaningfulMedium(task.medium)
+  const isMediumTask = (task) => hasMeaningfulProtocolValue(task.medium)
     || ["Media change", "Factor addition", "Replating"].includes(task.task_type);
   const explicitMediumDays = new Set(tasks.filter(isMediumTask).map((task) => Number(task.task_day)));
-  const protocolDuration = state.differentiationProtocols.find((protocol) => protocol.id === run.protocol_id)?.expected_duration_days ?? 90;
+  const configuredDuration = Number(state.differentiationProtocols.find((protocol) => protocol.id === run.protocol_id)?.expected_duration_days || 0);
+  const importedDuration = Math.max(0, ...allProtocolTasks.map((task) => Number(task.task_day) || 0));
+  const hasMaintenancePhase = tasks.some((task) => /maintenance|organoids? formed/i.test(`${task.title || ""} ${task.medium || ""}`));
+  const protocolDuration = Math.max(configuredDuration, importedDuration, hasMaintenancePhase ? 90 : 31);
   const duration = adjustedRunDay(run.id, protocolDuration);
   const maintenanceStartDay = adjustedRunDay(run.id, 31);
   const automaticChanges = [];
@@ -1782,7 +1796,7 @@ function buildRunSchedule(run) {
     const adjacentToExplicitChange = explicitMediumDays.has(day - 1) || explicitMediumDays.has(day + 1);
     const adjacentToAutomaticChange = automaticChanges.some((change) => Math.abs(change.task_day - day) <= 1);
     if (isPreferredDay && !explicitMediumDays.has(day) && !adjacentToExplicitChange && !adjacentToAutomaticChange) {
-      automaticChanges.push({ kind: "automatic", task_day: day, date, title: isMaintenancePhase ? "Maintenance medium change" : "Medium change", medium: automaticMediumForRunDay(run, day) });
+      automaticChanges.push({ kind: "automatic", task_day: day, date, title: isMaintenancePhase ? "Maintenance medium change" : "Medium change", medium: carriedForwardMedium(tasks, day) || automaticMediumForRunDay(run, day) });
     }
   }
   const deviations = deviationsForRun(run.id).map((deviation) => {
