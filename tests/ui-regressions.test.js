@@ -66,4 +66,9 @@ assert.match(reagentOperations, /scannerRequestId:\s*0/);
 assert.match(reagentOperations, /requestId !== reagentOpsState\.scannerRequestId/);
 assert.match(reagentOperations, /stream\?\.getTracks\?\.\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
 
+const reagentChecklists = read("reagent-checklists.js");
+assert.match(reagentChecklists, /data-check-quantity type="number" inputmode="decimal"/);
+assert.match(reagentChecklists, /reagentChecklistTranslate\("Order item"\)/);
+assert.match(reagentChecklists, /<details class="reagent-weekly-notes"/);
+
 console.log("UI regressions: translations, responsive layout, and scanner cancellation passed");

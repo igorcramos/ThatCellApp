@@ -365,8 +365,20 @@ function canManageLibraryRecord(record) {
   return isAdmin() || Boolean(currentUserId() && record?.created_by === currentUserId());
 }
 
+function isSharedLibraryRecord(record) {
+  return window.SharedLibrary?.isShared(record) ?? record?.is_shared === true;
+}
+
+function canUseLibraryRecord(record) {
+  return isSharedLibraryRecord(record) || canManageLibraryRecord(record);
+}
+
+function libraryVisibilityLabel(record) {
+  return isSharedLibraryRecord(record) ? "Shared with lab" : "Only me";
+}
+
 function libraryCreatorLabel(record) {
-  if (!state.authAvailable || !record?.created_by) return "Shared laboratory record";
+  if (!state.authAvailable || !record?.created_by) return isSharedLibraryRecord(record) ? "Shared laboratory record" : "Private record";
   if (record.created_by === currentUserId()) return "Added by you";
   const creator = state.profiles.find((profile) => profile.id === record.created_by);
   return creator?.full_name ? `Added by ${creator.full_name}` : "Added by a lab member";
@@ -1333,7 +1345,8 @@ function renderOptions() {
     vesselOptions,
   ].join("");
 
-  const protocolOptions = state.differentiationProtocols
+  const usableProtocols = state.differentiationProtocols.filter(canUseLibraryRecord);
+  const protocolOptions = usableProtocols
     .map((protocol) => `<option value="${protocol.id}">${escapeHtml(protocol.name)}</option>`)
     .join("");
   const manageableProtocols = state.differentiationProtocols.filter(canManageLibraryRecord);
@@ -1341,7 +1354,7 @@ function renderOptions() {
     .map((protocol) => `<option value="${protocol.id}">${escapeHtml(protocol.name)}</option>`)
     .join("");
   els.differentiationProtocolSelect.innerHTML = protocolOptions || '<option value="">Save a protocol first</option>';
-  els.differentiationProtocolSelect.disabled = state.differentiationProtocols.length === 0;
+  els.differentiationProtocolSelect.disabled = usableProtocols.length === 0;
   els.taskProtocolSelect.innerHTML = manageableProtocolOptions || '<option value="">Create or clone a protocol to add tasks</option>';
   els.taskProtocolSelect.disabled = manageableProtocols.length === 0;
   els.protocolTaskSubmitButton.disabled = manageableProtocols.length === 0;
@@ -1372,7 +1385,7 @@ function renderCellLines() {
       .some((value) => normalizedLibraryValue(value).includes(search)));
 
   if (visibleLines.length === 0) {
-    els.cellLinesList.innerHTML = '<div class="empty-state">No shared cell lines match this search.</div>';
+    els.cellLinesList.innerHTML = '<div class="empty-state">No available cell lines match this search.</div>';
     return;
   }
 
@@ -1380,6 +1393,7 @@ function renderCellLines() {
     .map((line) => {
       const title = cellLineDisplayName(line);
       const canManage = canManageLibraryRecord(line);
+      const isShared = isSharedLibraryRecord(line);
       const modifications = [
         line.has_crispr ? "CRISPR" : null,
         line.has_transgene ? "Transgene" : null,
@@ -1402,7 +1416,8 @@ function renderCellLines() {
             </div>
           </div>
           <div class="item-actions">
-            <span class="badge">Shared</span>
+            <span class="badge${isShared ? "" : " warning"}">${libraryVisibilityLabel(line)}</span>
+            ${canManage ? `<button class="secondary-button compact-button" data-set-cell-line-shared="${line.id}" data-shared="${String(!isShared)}" type="button">${isShared ? "Make private" : "Share with lab"}</button>` : ""}
             ${canManage ? `<button class="icon-button edit-button" data-edit-cell-line="${line.id}" type="button" title="Edit cell line" aria-label="Edit cell line">&#9998;</button>
             <button class="icon-button danger-button" data-delete-cell-line="${line.id}" type="button" title="Delete cell line" aria-label="Delete cell line">&#128465;</button>` : ""}
           </div>
@@ -1592,13 +1607,14 @@ function renderDifferentiationProtocols() {
       .some((value) => normalizedLibraryValue(value).includes(search)));
 
   if (visibleProtocols.length === 0) {
-    els.protocolsList.innerHTML = '<div class="empty-state">No shared protocols match this search.</div>';
+    els.protocolsList.innerHTML = '<div class="empty-state">No available protocols match this search.</div>';
     return;
   }
 
   els.protocolsList.innerHTML = visibleProtocols
     .map((protocol) => {
       const canManage = canManageLibraryRecord(protocol);
+      const isShared = isSharedLibraryRecord(protocol);
       const taskCount = state.protocolTasks.filter((task) => task.protocol_id === protocol.id).length;
       const meta = [
         protocol.project,
@@ -1617,8 +1633,9 @@ function renderDifferentiationProtocols() {
             </div>
           </div>
           <div class="item-actions">
-            <span class="badge">Shared protocol</span>
-            <button class="secondary-button compact-button" data-clone-protocol="${protocol.id}" type="button">Clone & adapt</button>
+            <span class="badge${isShared ? "" : " warning"}">${libraryVisibilityLabel(protocol)}</span>
+            ${canManage ? `<button class="secondary-button compact-button" data-set-protocol-shared="${protocol.id}" data-shared="${String(!isShared)}" type="button">${isShared ? "Make private" : "Share with lab"}</button>` : ""}
+            ${isShared || !canManage ? `<button class="secondary-button compact-button" data-clone-protocol="${protocol.id}" type="button">Clone & adapt</button>` : ""}
             ${canManage ? `<button class="icon-button edit-button" data-edit-protocol="${protocol.id}" type="button" title="Edit protocol" aria-label="Edit protocol">&#9998;</button>
             <button class="icon-button danger-button" data-delete-protocol="${protocol.id}" type="button" title="Delete protocol" aria-label="Delete protocol">&#128465;</button>` : ""}
           </div>
@@ -2957,14 +2974,20 @@ async function handleCellLineSubmit(event) {
   const fullName = valueOrNull(data.get("full_name"));
   const clone = valueOrNull(data.get("clone"));
   const editingId = valueOrNull(data.get("id"));
-  const duplicate = window.SharedLibrary?.findDuplicateCellLine(state.cellLines, { identifier, clone }, editingId)
+  const isShared = data.get("is_shared") === "on";
+  const duplicateCandidate = { identifier, clone, is_shared: isShared, created_by: currentUserId() };
+  const duplicate = window.SharedLibrary?.findDuplicateCellLine(state.cellLines, duplicateCandidate, editingId)
     || state.cellLines.find((line) => line.id !== editingId
+      && Boolean(line.is_shared) === isShared
+      && (isShared || !currentUserId() || line.created_by === currentUserId())
       && normalizedLibraryValue(line.identifier || line.name) === normalizedLibraryValue(identifier)
       && normalizedLibraryValue(line.clone) === normalizedLibraryValue(clone));
   if (duplicate) {
     if (els.cellLineLibrarySearch) els.cellLineLibrarySearch.value = identifier || clone || "";
     renderCellLines();
-    showToast("This cell line is already in the shared library. Select it instead of creating another record.");
+    showToast(isShared
+      ? "This cell line is already shared with the laboratory. Select the existing record instead."
+      : "You already have a private cell line with this identifier and clone.");
     return;
   }
   const hasCrispr = data.get("has_crispr") === "on";
@@ -2989,6 +3012,7 @@ async function handleCellLineSubmit(event) {
     plasmid: hasTransgene ? valueOrNull(data.get("plasmid")) : null,
     transgene_notes: hasTransgene ? valueOrNull(data.get("transgene_notes")) : null,
     notes: valueOrNull(data.get("notes")),
+    is_shared: isShared,
   };
 
   const query = editingId
@@ -2999,7 +3023,9 @@ async function handleCellLineSubmit(event) {
 
   if (error) {
     if (isDuplicateLibraryError(error)) {
-      showToast("This cell line is already in the shared library. Select it instead of creating another record.");
+      showToast(isShared
+        ? "This cell line is already shared with the laboratory. Select the existing record instead."
+        : "You already have a private cell line with this identifier and clone.");
       return;
     }
     showToast(`Error saving cell line: ${error.message}`);
@@ -3395,14 +3421,20 @@ async function handleProtocolSubmit(event) {
   const editingId = valueOrNull(data.get("id"));
   const name = valueOrNull(data.get("name"));
   const version = valueOrNull(data.get("version"));
-  const duplicate = window.SharedLibrary?.findDuplicateProtocol(state.differentiationProtocols, { name, version }, editingId)
+  const isShared = data.get("is_shared") === "on";
+  const duplicateCandidate = { name, version, is_shared: isShared, created_by: currentUserId() };
+  const duplicate = window.SharedLibrary?.findDuplicateProtocol(state.differentiationProtocols, duplicateCandidate, editingId)
     || state.differentiationProtocols.find((protocol) => protocol.id !== editingId
+      && Boolean(protocol.is_shared) === isShared
+      && (isShared || !currentUserId() || protocol.created_by === currentUserId())
       && normalizedLibraryValue(protocol.name) === normalizedLibraryValue(name)
       && normalizedLibraryValue(protocol.version) === normalizedLibraryValue(version));
   if (duplicate) {
     if (els.protocolLibrarySearch) els.protocolLibrarySearch.value = name || version || "";
     renderDifferentiationProtocols();
-    showToast("This protocol and version already exist in the shared library. Use it directly or clone it before adapting.");
+    showToast(isShared
+      ? "This protocol and version are already shared with the laboratory. Use the existing template or clone it."
+      : "You already have a private protocol with this name and version.");
     return;
   }
 
@@ -3414,6 +3446,7 @@ async function handleProtocolSubmit(event) {
     version,
     expected_duration_days: numberOrNull(data.get("expected_duration_days")),
     notes: valueOrNull(data.get("notes")),
+    is_shared: isShared,
   };
 
   const query = editingId
@@ -3424,7 +3457,9 @@ async function handleProtocolSubmit(event) {
 
   if (error) {
     if (isDuplicateLibraryError(error)) {
-      showToast("This protocol and version already exist in the shared library. Use it directly or clone it before adapting.");
+      showToast(isShared
+        ? "This protocol and version are already shared with the laboratory. Use the existing template or clone it."
+        : "You already have a private protocol with this name and version.");
       return;
     }
     showToast(`Error saving protocol: ${error.message}`);
@@ -3498,6 +3533,25 @@ async function cloneProtocol(protocolId) {
   showToast("Protocol cloned with all tasks. Rename it or adapt the steps you need.");
 }
 
+async function setLibraryRecordSharing(table, record, shouldShare, recordType) {
+  if (!ensureDb() || !record || !canManageLibraryRecord(record)) return;
+  const confirmation = `Make ${record.name || record.identifier || `this ${recordType}`} private?\n\nOther laboratory users will no longer find or use it from the shared library.`;
+  if (!shouldShare && !window.confirm(window.translateAppText?.(confirmation) || confirmation)) return;
+
+  const { error } = await db.from(table).update({ is_shared: shouldShare }).eq("id", record.id);
+  if (error) {
+    if (isDuplicateLibraryError(error)) {
+      showToast(`A ${recordType} with the same identity is already shared with the laboratory.`);
+      return;
+    }
+    showToast(`Error changing ${recordType} access: ${error.message}`);
+    return;
+  }
+
+  showToast(shouldShare ? `${recordType === "protocol" ? "Protocol" : "Cell line"} shared with the laboratory.` : `${recordType === "protocol" ? "Protocol" : "Cell line"} is now private.`);
+  await loadAll();
+}
+
 function parseProtocolFile(text) {
   const lines = text.replace(/^\uFEFF/, "").trim().split(/\r?\n/).filter(Boolean);
   if (lines.length < 2) throw new Error("The file needs a header and at least one protocol row.");
@@ -3551,14 +3605,13 @@ async function handleProtocolImport(event) {
     if (!rows.length) throw new Error("No actionable protocol rows were found.");
     const names = [...new Set(rows.map((row) => row.protocolName))];
     for (const name of names) {
-      const sharedExisting = state.differentiationProtocols.find((protocol) => normalizedLibraryValue(protocol.name) === normalizedLibraryValue(name));
-      if (sharedExisting && !canManageLibraryRecord(sharedExisting)) {
-        throw new Error(`${name} already exists in the shared library. Clone it before adapting or replacing its tasks.`);
-      }
-      const existing = sharedExisting;
+      const existing = state.differentiationProtocols.find((protocol) => canManageLibraryRecord(protocol)
+        && !isSharedLibraryRecord(protocol)
+        && normalizedLibraryValue(protocol.name) === normalizedLibraryValue(name)
+        && normalizedLibraryValue(protocol.version) === normalizedLibraryValue("Imported"));
       let protocolId = existing?.id;
       if (!protocolId) {
-        const { data, error } = await db.from("differentiation_protocols").insert({ name, expected_duration_days: Math.max(...rows.filter((row) => row.protocolName === name).map((row) => row.day)), version: "Imported" }).select("id").single();
+        const { data, error } = await db.from("differentiation_protocols").insert({ name, expected_duration_days: Math.max(...rows.filter((row) => row.protocolName === name).map((row) => row.day)), version: "Imported", is_shared: false }).select("id").single();
         if (error) throw error;
         protocolId = data.id;
       }
@@ -4412,6 +4465,12 @@ function toggleCryoLookup() {
 }
 
 function handleProtocolsListClick(event) {
+  const sharingButton = event.target.closest("[data-set-protocol-shared]");
+  if (sharingButton) {
+    const protocol = state.differentiationProtocols.find((item) => item.id === sharingButton.dataset.setProtocolShared);
+    setLibraryRecordSharing("differentiation_protocols", protocol, sharingButton.dataset.shared === "true", "protocol");
+    return;
+  }
   const cloneButton = event.target.closest("[data-clone-protocol]");
   if (cloneButton) {
     cloneProtocol(cloneButton.dataset.cloneProtocol);
@@ -4675,6 +4734,12 @@ function syncCryoVialFormSelection() {
 }
 
 function handleCellLineListClick(event) {
+  const sharingButton = event.target.closest("[data-set-cell-line-shared]");
+  if (sharingButton) {
+    const line = state.cellLines.find((item) => item.id === sharingButton.dataset.setCellLineShared);
+    setLibraryRecordSharing("cell_lines", line, sharingButton.dataset.shared === "true", "cell line");
+    return;
+  }
   const deleteButton = event.target.closest("[data-delete-cell-line]");
   if (deleteButton) {
     deleteRecord("cell_lines", deleteButton.dataset.deleteCellLine, "cell line");
@@ -4750,6 +4815,7 @@ function fillCellLineForm(line) {
   setFieldValue(form, "plasmid", line.plasmid);
   setFieldValue(form, "transgene_notes", line.transgene_notes);
   setFieldValue(form, "notes", line.notes);
+  setFieldValue(form, "is_shared", isSharedLibraryRecord(line));
   els.cellLineSubmitButton.textContent = "Update cell line";
   els.cancelCellLineEdit.classList.remove("is-hidden");
   syncConditionalFields();
@@ -4773,6 +4839,7 @@ function fillProtocolForm(protocol) {
   setFieldValue(form, "version", protocol.version);
   setFieldValue(form, "expected_duration_days", protocol.expected_duration_days);
   setFieldValue(form, "notes", protocol.notes);
+  setFieldValue(form, "is_shared", isSharedLibraryRecord(protocol));
   els.protocolSubmitButton.textContent = "Update protocol";
   els.cancelProtocolEdit.classList.remove("is-hidden");
   form.scrollIntoView({ behavior: "smooth", block: "start" });

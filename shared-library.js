@@ -22,14 +22,27 @@
     return (records || []).filter((record) => includesQuery(record, fields, query));
   }
 
+  function isShared(record) {
+    return record?.is_shared === true;
+  }
+
+  function isInSameVisibilityScope(record, candidate) {
+    if (isShared(candidate)) return isShared(record);
+    if (isShared(record)) return false;
+    const ownerId = candidate?.created_by;
+    return !ownerId || record?.created_by === ownerId;
+  }
+
   function findDuplicateCellLine(records, candidate, excludedId = null) {
     return (records || []).find((record) => record.id !== excludedId
+      && isInSameVisibilityScope(record, candidate)
       && normalize(record.identifier || record.name) === normalize(candidate?.identifier)
       && normalize(record.clone) === normalize(candidate?.clone));
   }
 
   function findDuplicateProtocol(records, candidate, excludedId = null) {
     return (records || []).find((record) => record.id !== excludedId
+      && isInSameVisibilityScope(record, candidate)
       && normalize(record.name) === normalize(candidate?.name)
       && normalize(record.version) === normalize(candidate?.version));
   }
@@ -48,6 +61,7 @@
     filterProtocols,
     findDuplicateCellLine,
     findDuplicateProtocol,
+    isShared,
     nextAdaptationName,
     normalize,
   };

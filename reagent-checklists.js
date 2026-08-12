@@ -174,12 +174,16 @@ function renderReagentWeeklyCheckRows() {
     const entry = entries.get(item.id);
     const quantity = entry?.quantity_observed ?? "";
     const ordered = sameDateSession ? Boolean(entry?.ordered) : false;
+    const notes = sameDateSession ? entry?.notes || "" : "";
     const unit = reagentChecklistTranslate(item.unit);
     return `<div class="reagent-weekly-row" data-check-item="${escapeHtml(item.id)}">
-      <div><strong>${escapeHtml(item.display_name)}</strong><span>${escapeHtml(item.expected_location || reagentChecklistTranslate("No location"))} · ${escapeHtml(`${reagentChecklistTranslate("Minimum")} ${item.minimum_quantity} ${unit}`)}</span></div>
-      <label>${escapeHtml(reagentChecklistTranslate("Count"))}<input data-check-quantity type="number" min="0" step="any" value="${escapeHtml(quantity)}"></label>
-      <label class="checkbox-label"><input data-check-ordered type="checkbox" ${ordered ? "checked" : ""}> ${escapeHtml(reagentChecklistTranslate("Ordered"))}</label>
-      <label>${escapeHtml(reagentChecklistTranslate("Notes"))}<input data-check-notes value="${escapeHtml(sameDateSession ? entry?.notes || "" : "")}"></label>
+      <div class="reagent-weekly-item"><strong>${escapeHtml(item.display_name)}</strong><span>${escapeHtml(item.expected_location || reagentChecklistTranslate("No location"))} · ${escapeHtml(`${reagentChecklistTranslate("Minimum")} ${item.minimum_quantity} ${unit}`)}</span></div>
+      <label class="reagent-weekly-count">${escapeHtml(reagentChecklistTranslate("Count"))}<input data-check-quantity type="number" inputmode="decimal" min="0" step="any" value="${escapeHtml(quantity)}"></label>
+      <label class="checkbox-label reagent-weekly-order"><input data-check-ordered type="checkbox" ${ordered ? "checked" : ""}> ${escapeHtml(reagentChecklistTranslate("Order item"))}</label>
+      <details class="reagent-weekly-notes" ${notes ? "open" : ""}>
+        <summary>${escapeHtml(reagentChecklistTranslate("Notes"))}${notes ? " ·" : ""}</summary>
+        <input data-check-notes aria-label="${escapeHtml(reagentChecklistTranslate("Notes"))}" placeholder="${escapeHtml(reagentChecklistTranslate("Optional"))}" value="${escapeHtml(notes)}">
+      </details>
     </div>`;
   }).join("") : `<div class="empty-state">${escapeHtml(reagentChecklistTranslate("Add active items before saving a weekly check."))}</div>`;
 }
@@ -195,7 +199,7 @@ function renderReagentChecklistHistory() {
     const ordered = entries.filter((entry) => entry.ordered).length;
     return `<article class="compact-alert ${low ? "is-danger" : "is-info"}">
       <strong>${escapeHtml(formatDate(session.checked_on))} · ${escapeHtml(reagentChecklistProfileName(session.checked_by))}</strong>
-      <span>${escapeHtml(`${checked} ${reagentChecklistTranslate("items checked")} · ${low} ${reagentChecklistTranslate("low/out")} · ${ordered} ${reagentChecklistTranslate("ordered")}`)}</span>
+      <span>${escapeHtml(`${checked} ${reagentChecklistTranslate("items checked")} · ${low} ${reagentChecklistTranslate("low/out")} · ${ordered} ${reagentChecklistTranslate("to order")}`)}</span>
       ${session.notes ? `<span>${escapeHtml(session.notes)}</span>` : ""}
       <button class="text-button" type="button" data-open-check-session="${escapeHtml(session.checked_on)}">${escapeHtml(reagentChecklistTranslate("Open check"))}</button>
     </article>`;
