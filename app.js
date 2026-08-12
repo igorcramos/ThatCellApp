@@ -3690,6 +3690,8 @@ function printableScheduleText(text) {
   return window.translateAppText?.(text) || text;
 }
 
+const SCHEDULE_ENGINE_VERSION = "2026.08.12.1";
+
 function printableScheduleMonthTitle(monthKey) {
   const locale = window.getAppLocale?.() || "en-US";
   const label = new Intl.DateTimeFormat(locale, {
@@ -3712,9 +3714,10 @@ function printableScheduleEntryHtml({ run, item }) {
     ? [item.reason, item.notes].filter(Boolean).join(" · ")
     : item.medium || [item.quantity, item.notes].filter(Boolean).join(" · ");
   const title = printableScheduleText(item.title || item.experiment || "Collection");
-  return `<div class="print-calendar-event ${item.kind === "deviation" ? "is-deviation" : ""}" style="--run-color:${escapeHtml(runScheduleColor(run))}">
+  const automaticLabel = item.kind === "automatic" ? `<span class="print-event-source">${escapeHtml(printableScheduleText("Automatic"))}</span>` : "";
+  return `<div class="print-calendar-event ${item.kind === "deviation" ? "is-deviation" : ""} ${item.kind === "automatic" ? "is-automatic" : ""}" style="--run-color:${escapeHtml(runScheduleColor(run))}">
     <div><strong>${escapeHtml(run.run_name)}</strong><span>D${escapeHtml(item.task_day)}</span></div>
-    <h3>${escapeHtml(title)}</h3>
+    <h3>${escapeHtml(title)}${automaticLabel}</h3>
     ${detail ? `<p>${escapeHtml(detail)}</p>` : ""}
   </div>`;
 }
@@ -3730,10 +3733,11 @@ function printableScheduleHtml(runs) {
   const weekdays = printableScheduleWeekdays();
   return months.map((month) => {
     const monthRunIds = new Set(month.cells.filter(Boolean).flatMap((cell) => cell.entries.map((entry) => entry.run.id)));
+    const automaticChangeCount = month.cells.filter(Boolean).flatMap((cell) => cell.entries).filter((entry) => entry.item.kind === "automatic").length;
     const legend = scheduledRuns.filter((run) => monthRunIds.has(run.id)).map((run) => `<span style="--run-color:${escapeHtml(runScheduleColor(run))}"><i></i>${deviationsForRun(run.id).length ? "⚑ " : ""}${escapeHtml(differentiationRunLabel(run))}</span>`).join("");
     return `<section class="print-month" style="--calendar-weeks:${month.weeks}">
     <header class="print-month-header">
-      <div><p>${escapeHtml(printableScheduleText("Monthly differentiation calendar"))}</p><h1>${escapeHtml(printableScheduleMonthTitle(month.key))}</h1><small>${escapeHtml(printableScheduleText("Generated"))} ${escapeHtml(formatDate(todayValue()))}</small></div>
+      <div><p>${escapeHtml(printableScheduleText("Monthly differentiation calendar"))}</p><h1>${escapeHtml(printableScheduleMonthTitle(month.key))}</h1><small>${escapeHtml(printableScheduleText("Generated"))} ${escapeHtml(formatDate(todayValue()))} · ${automaticChangeCount} ${escapeHtml(printableScheduleText("automatic medium changes"))} · Engine ${SCHEDULE_ENGINE_VERSION}</small></div>
       <div class="print-legend">${legend}</div>
     </header>
     <div class="print-calendar-weekdays">${weekdays.map((weekday) => `<span>${escapeHtml(weekday)}</span>`).join("")}</div>
