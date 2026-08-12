@@ -1,6 +1,15 @@
 .media-workspace {
   display: grid;
   gap: 18px;
+  min-width: 0;
+}
+
+.media-workspace > *,
+.media-editor,
+.media-component-list,
+.media-component-form,
+.media-results-wrap {
+  min-width: 0;
 }
 
 .media-recipe-toolbar,
@@ -195,6 +204,7 @@
 }
 
 .media-results-wrap {
+  max-width: 100%;
   overflow-x: auto;
 }
 
@@ -264,6 +274,11 @@
 }
 
 @media (max-width: 620px) {
+  .media-recipe-toolbar,
+  .media-calculator-toolbar {
+    min-width: 0;
+  }
+
   .media-recipe-summary,
   .media-liquid-summary,
   .media-form-section {

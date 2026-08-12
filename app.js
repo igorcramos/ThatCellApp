@@ -109,9 +109,11 @@ const els = {
   collectionForm: document.querySelector("#collectionForm"),
   eventForm: document.querySelector("#eventForm"),
   cellLinesList: document.querySelector("#cellLinesList"),
+  cellLineLibrarySearch: document.querySelector("#cellLineLibrarySearch"),
   culturesList: document.querySelector("#culturesList"),
   vesselsList: document.querySelector("#vesselsList"),
   protocolsList: document.querySelector("#protocolsList"),
+  protocolLibrarySearch: document.querySelector("#protocolLibrarySearch"),
   protocolTasksList: document.querySelector("#protocolTasksList"),
   differentiationRunsList: document.querySelector("#differentiationRunsList"),
   runDeviationForm: document.querySelector("#runDeviationForm"),
@@ -358,6 +360,26 @@ function isAdmin() {
   return state.profile?.role === "admin";
 }
 
+function canManageLibraryRecord(record) {
+  if (!state.authAvailable) return true;
+  return isAdmin() || Boolean(currentUserId() && record?.created_by === currentUserId());
+}
+
+function libraryCreatorLabel(record) {
+  if (!state.authAvailable || !record?.created_by) return "Shared laboratory record";
+  if (record.created_by === currentUserId()) return "Added by you";
+  const creator = state.profiles.find((profile) => profile.id === record.created_by);
+  return creator?.full_name ? `Added by ${creator.full_name}` : "Added by a lab member";
+}
+
+function normalizedLibraryValue(value) {
+  return window.SharedLibrary?.normalize(value) || String(value || "").trim().toLocaleLowerCase();
+}
+
+function isDuplicateLibraryError(error) {
+  return error?.code === "23505" || /duplicate key|unique constraint/i.test(String(error?.message || ""));
+}
+
 function profileName(profile) {
   return profile?.full_name || profile?.email || "";
 }
@@ -430,7 +452,6 @@ function projectValues() {
     ...state.projects.map((project) => project.name),
     ...state.cultures.map((culture) => culture.project),
     ...state.cryoBoxes.map((box) => box.project),
-    ...state.differentiationProtocols.map((protocol) => protocol.project),
     ...state.differentiationRuns.map((run) => run.project),
   ]).sort((a, b) => a.localeCompare(b));
 }
@@ -1264,13 +1285,20 @@ function renderOptions() {
   const projectOptions = projectValues()
     .map((project) => `<option value="${escapeHtml(project)}">${escapeHtml(project)}</option>`)
     .join("");
+  const protocolProjectOptions = uniqueValues([
+    ...projectValues(),
+    ...state.differentiationProtocols.map((protocol) => protocol.project),
+  ])
+    .sort((a, b) => a.localeCompare(b))
+    .map((project) => `<option value="${escapeHtml(project)}">${escapeHtml(project)}</option>`)
+    .join("");
   els.historyProjectFilter.innerHTML = [
     '<option value="">All projects</option>',
     projectOptions,
   ].join("");
   els.protocolTaskProjectFilter.innerHTML = [
     '<option value="">All projects</option>',
-    projectOptions,
+    protocolProjectOptions,
   ].join("");
   els.projectViewFilter.innerHTML = [
     '<option value="">All projects</option>',
@@ -1308,10 +1336,15 @@ function renderOptions() {
   const protocolOptions = state.differentiationProtocols
     .map((protocol) => `<option value="${protocol.id}">${escapeHtml(protocol.name)}</option>`)
     .join("");
+  const manageableProtocols = state.differentiationProtocols.filter(canManageLibraryRecord);
+  const manageableProtocolOptions = manageableProtocols
+    .map((protocol) => `<option value="${protocol.id}">${escapeHtml(protocol.name)}</option>`)
+    .join("");
   els.differentiationProtocolSelect.innerHTML = protocolOptions || '<option value="">Save a protocol first</option>';
   els.differentiationProtocolSelect.disabled = state.differentiationProtocols.length === 0;
-  els.taskProtocolSelect.innerHTML = protocolOptions || '<option value="">Save a protocol first</option>';
-  els.taskProtocolSelect.disabled = state.differentiationProtocols.length === 0;
+  els.taskProtocolSelect.innerHTML = manageableProtocolOptions || '<option value="">Create or clone a protocol to add tasks</option>';
+  els.taskProtocolSelect.disabled = manageableProtocols.length === 0;
+  els.protocolTaskSubmitButton.disabled = manageableProtocols.length === 0;
 
   const runOptions = state.differentiationRuns
     .map((run) => `<option value="${run.id}">${escapeHtml(differentiationRunLabel(run))}</option>`)
@@ -1333,9 +1366,20 @@ function renderCellLines() {
     return;
   }
 
-  els.cellLinesList.innerHTML = state.cellLines
+  const search = normalizedLibraryValue(els.cellLineLibrarySearch?.value);
+  const visibleLines = window.SharedLibrary?.filterCellLines(state.cellLines, search)
+    || state.cellLines.filter((line) => !search || [line.identifier, line.full_name, line.clone, line.name, line.species, line.cell_type, line.source]
+      .some((value) => normalizedLibraryValue(value).includes(search)));
+
+  if (visibleLines.length === 0) {
+    els.cellLinesList.innerHTML = '<div class="empty-state">No shared cell lines match this search.</div>';
+    return;
+  }
+
+  els.cellLinesList.innerHTML = visibleLines
     .map((line) => {
       const title = cellLineDisplayName(line);
+      const canManage = canManageLibraryRecord(line);
       const modifications = [
         line.has_crispr ? "CRISPR" : null,
         line.has_transgene ? "Transgene" : null,
@@ -1347,6 +1391,7 @@ function renderCellLines() {
         line.cell_type,
         line.source,
         ...modifications,
+        libraryCreatorLabel(line),
       ].filter(Boolean);
       return `
         <article class="item">
@@ -1357,8 +1402,9 @@ function renderCellLines() {
             </div>
           </div>
           <div class="item-actions">
-            <button class="icon-button edit-button" data-edit-cell-line="${line.id}" type="button" title="Edit cell line" aria-label="Edit cell line">&#9998;</button>
-            <button class="icon-button danger-button" data-delete-cell-line="${line.id}" type="button" title="Delete cell line" aria-label="Delete cell line">&#128465;</button>
+            <span class="badge">Shared</span>
+            ${canManage ? `<button class="icon-button edit-button" data-edit-cell-line="${line.id}" type="button" title="Edit cell line" aria-label="Edit cell line">&#9998;</button>
+            <button class="icon-button danger-button" data-delete-cell-line="${line.id}" type="button" title="Delete cell line" aria-label="Delete cell line">&#128465;</button>` : ""}
           </div>
         </article>
       `;
@@ -1540,8 +1586,19 @@ function renderDifferentiationProtocols() {
     return;
   }
 
-  els.protocolsList.innerHTML = state.differentiationProtocols
+  const search = normalizedLibraryValue(els.protocolLibrarySearch?.value);
+  const visibleProtocols = window.SharedLibrary?.filterProtocols(state.differentiationProtocols, search)
+    || state.differentiationProtocols.filter((protocol) => !search || [protocol.name, protocol.project, protocol.target_cell_type, protocol.version, protocol.notes]
+      .some((value) => normalizedLibraryValue(value).includes(search)));
+
+  if (visibleProtocols.length === 0) {
+    els.protocolsList.innerHTML = '<div class="empty-state">No shared protocols match this search.</div>';
+    return;
+  }
+
+  els.protocolsList.innerHTML = visibleProtocols
     .map((protocol) => {
+      const canManage = canManageLibraryRecord(protocol);
       const taskCount = state.protocolTasks.filter((task) => task.protocol_id === protocol.id).length;
       const meta = [
         protocol.project,
@@ -1549,6 +1606,7 @@ function renderDifferentiationProtocols() {
         protocol.version,
         protocol.expected_duration_days !== null ? `${protocol.expected_duration_days} days` : null,
         taskCount ? `${taskCount} planned task${taskCount === 1 ? "" : "s"}` : null,
+        libraryCreatorLabel(protocol),
       ].filter(Boolean);
       return `
         <article class="item project-card" style="--project-color: ${escapeHtml(projectColor(protocol?.project))}">
@@ -1559,10 +1617,10 @@ function renderDifferentiationProtocols() {
             </div>
           </div>
           <div class="item-actions">
-            <span class="badge">Protocol</span>
+            <span class="badge">Shared protocol</span>
             <button class="secondary-button compact-button" data-clone-protocol="${protocol.id}" type="button">Clone & adapt</button>
-            <button class="icon-button edit-button" data-edit-protocol="${protocol.id}" type="button" title="Edit protocol" aria-label="Edit protocol">&#9998;</button>
-            <button class="icon-button danger-button" data-delete-protocol="${protocol.id}" type="button" title="Delete protocol" aria-label="Delete protocol">&#128465;</button>
+            ${canManage ? `<button class="icon-button edit-button" data-edit-protocol="${protocol.id}" type="button" title="Edit protocol" aria-label="Edit protocol">&#9998;</button>
+            <button class="icon-button danger-button" data-delete-protocol="${protocol.id}" type="button" title="Delete protocol" aria-label="Delete protocol">&#128465;</button>` : ""}
           </div>
         </article>
       `;
@@ -1586,6 +1644,7 @@ function renderProtocolTasks() {
   els.protocolTasksList.innerHTML = tasks
     .map((task) => {
       const protocol = state.differentiationProtocols.find((item) => item.id === task.protocol_id);
+      const canManage = canManageLibraryRecord(protocol);
       const meta = [
         protocol?.project,
         protocol?.name,
@@ -1604,8 +1663,8 @@ function renderProtocolTasks() {
             ${task.medium ? `<p class="task-medium"><strong>Medium:</strong> ${escapeHtml(task.medium)}</p>` : ""}
           </div>
           <div class="item-actions">
-            <button class="icon-button edit-button" data-edit-protocol-task="${task.id}" type="button" title="Edit task" aria-label="Edit task">&#9998;</button>
-            <button class="icon-button danger-button" data-delete-protocol-task="${task.id}" type="button" title="Delete task" aria-label="Delete task">&#128465;</button>
+            ${canManage ? `<button class="icon-button edit-button" data-edit-protocol-task="${task.id}" type="button" title="Edit task" aria-label="Edit task">&#9998;</button>
+            <button class="icon-button danger-button" data-delete-protocol-task="${task.id}" type="button" title="Delete task" aria-label="Delete task">&#128465;</button>` : '<span class="badge">Read only</span>'}
           </div>
         </article>
       `;
@@ -2897,6 +2956,17 @@ async function handleCellLineSubmit(event) {
   const identifier = valueOrNull(data.get("identifier"));
   const fullName = valueOrNull(data.get("full_name"));
   const clone = valueOrNull(data.get("clone"));
+  const editingId = valueOrNull(data.get("id"));
+  const duplicate = window.SharedLibrary?.findDuplicateCellLine(state.cellLines, { identifier, clone }, editingId)
+    || state.cellLines.find((line) => line.id !== editingId
+      && normalizedLibraryValue(line.identifier || line.name) === normalizedLibraryValue(identifier)
+      && normalizedLibraryValue(line.clone) === normalizedLibraryValue(clone));
+  if (duplicate) {
+    if (els.cellLineLibrarySearch) els.cellLineLibrarySearch.value = identifier || clone || "";
+    renderCellLines();
+    showToast("This cell line is already in the shared library. Select it instead of creating another record.");
+    return;
+  }
   const hasCrispr = data.get("has_crispr") === "on";
   const hasTransgene = data.get("has_transgene") === "on";
   const payload = {
@@ -2921,7 +2991,6 @@ async function handleCellLineSubmit(event) {
     notes: valueOrNull(data.get("notes")),
   };
 
-  const editingId = valueOrNull(data.get("id"));
   const query = editingId
     ? db.from("cell_lines").update(payload).eq("id", editingId)
     : db.from("cell_lines").insert(payload);
@@ -2929,6 +2998,10 @@ async function handleCellLineSubmit(event) {
   submit.disabled = false;
 
   if (error) {
+    if (isDuplicateLibraryError(error)) {
+      showToast("This cell line is already in the shared library. Select it instead of creating another record.");
+      return;
+    }
     showToast(`Error saving cell line: ${error.message}`);
     return;
   }
@@ -3319,18 +3392,30 @@ async function handleProtocolSubmit(event) {
   const form = event.currentTarget;
   const submit = form.querySelector("button[type='submit']");
   const data = new FormData(form);
+  const editingId = valueOrNull(data.get("id"));
+  const name = valueOrNull(data.get("name"));
+  const version = valueOrNull(data.get("version"));
+  const duplicate = window.SharedLibrary?.findDuplicateProtocol(state.differentiationProtocols, { name, version }, editingId)
+    || state.differentiationProtocols.find((protocol) => protocol.id !== editingId
+      && normalizedLibraryValue(protocol.name) === normalizedLibraryValue(name)
+      && normalizedLibraryValue(protocol.version) === normalizedLibraryValue(version));
+  if (duplicate) {
+    if (els.protocolLibrarySearch) els.protocolLibrarySearch.value = name || version || "";
+    renderDifferentiationProtocols();
+    showToast("This protocol and version already exist in the shared library. Use it directly or clone it before adapting.");
+    return;
+  }
 
   submit.disabled = true;
   const payload = {
-    name: valueOrNull(data.get("name")),
+    name,
     project: valueFromSelectWithCustom(data, "project", "custom_project"),
     target_cell_type: valueOrNull(data.get("target_cell_type")),
-    version: valueOrNull(data.get("version")),
+    version,
     expected_duration_days: numberOrNull(data.get("expected_duration_days")),
     notes: valueOrNull(data.get("notes")),
   };
 
-  const editingId = valueOrNull(data.get("id"));
   const query = editingId
     ? db.from("differentiation_protocols").update(payload).eq("id", editingId)
     : db.from("differentiation_protocols").insert(payload);
@@ -3338,6 +3423,10 @@ async function handleProtocolSubmit(event) {
   submit.disabled = false;
 
   if (error) {
+    if (isDuplicateLibraryError(error)) {
+      showToast("This protocol and version already exist in the shared library. Use it directly or clone it before adapting.");
+      return;
+    }
     showToast(`Error saving protocol: ${error.message}`);
     return;
   }
@@ -3353,10 +3442,16 @@ async function handleProtocolTaskSubmit(event) {
   const form = event.currentTarget;
   const submit = form.querySelector("button[type='submit']");
   const data = new FormData(form);
+  const protocolId = valueOrNull(data.get("protocol_id"));
+  const protocol = state.differentiationProtocols.find((item) => item.id === protocolId);
+  if (!protocol || !canManageLibraryRecord(protocol)) {
+    showToast("Clone this shared protocol before changing its tasks.");
+    return;
+  }
 
   submit.disabled = true;
   const payload = {
-    protocol_id: valueOrNull(data.get("protocol_id")),
+    protocol_id: protocolId,
     task_day: numberOrNull(data.get("task_day")),
     title: valueOrNull(data.get("title")),
     task_type: valueOrNull(data.get("task_type")),
@@ -3386,20 +3481,21 @@ async function cloneProtocol(protocolId) {
   if (!ensureDb()) return;
   const source = state.differentiationProtocols.find((protocol) => protocol.id === protocolId);
   if (!source) return;
-  const { id, created_at, created_by, ...copy } = source;
-  const { data: cloned, error } = await db.from("differentiation_protocols")
-    .insert({ ...copy, name: `${source.name} (adaptation)`, version: source.version ? `${source.version} copy` : "adaptation" })
-    .select("id").single();
+  const clonedName = window.SharedLibrary?.nextAdaptationName(source.name, state.differentiationProtocols)
+    || `${source.name} (adaptation)`;
+  const canUseSourceProject = !source.project || !state.authAvailable || isAdmin()
+    || state.projects.some((project) => project.name === source.project);
+  const { data: clonedId, error } = await db.rpc("clone_shared_protocol", {
+    source_protocol_id: source.id,
+    cloned_name: clonedName,
+    cloned_version: source.version ? `${source.version} adaptation` : "adaptation",
+    cloned_project: canUseSourceProject ? source.project : null,
+  });
   if (error) return showToast(`Error cloning protocol: ${error.message}`);
-  const tasks = state.protocolTasks.filter((task) => task.protocol_id === protocolId).map(({ id: taskId, created_at: taskCreated, created_by: taskCreator, ...task }) => ({ ...task, protocol_id: cloned.id }));
-  if (tasks.length) {
-    const { error: taskError } = await db.from("differentiation_protocol_tasks").insert(tasks);
-    if (taskError) return showToast(`Protocol cloned, but its tasks could not be copied: ${taskError.message}`);
-  }
   await loadAll();
-  const clonedProtocol = state.differentiationProtocols.find((protocol) => protocol.id === cloned.id);
+  const clonedProtocol = state.differentiationProtocols.find((protocol) => protocol.id === clonedId);
   if (clonedProtocol) fillProtocolForm(clonedProtocol);
-  showToast("Protocol cloned. Rename it and adapt any task.");
+  showToast("Protocol cloned with all tasks. Rename it or adapt the steps you need.");
 }
 
 function parseProtocolFile(text) {
@@ -3455,7 +3551,11 @@ async function handleProtocolImport(event) {
     if (!rows.length) throw new Error("No actionable protocol rows were found.");
     const names = [...new Set(rows.map((row) => row.protocolName))];
     for (const name of names) {
-      const existing = state.differentiationProtocols.find((protocol) => protocol.name === name);
+      const sharedExisting = state.differentiationProtocols.find((protocol) => normalizedLibraryValue(protocol.name) === normalizedLibraryValue(name));
+      if (sharedExisting && !canManageLibraryRecord(sharedExisting)) {
+        throw new Error(`${name} already exists in the shared library. Clone it before adapting or replacing its tasks.`);
+      }
+      const existing = sharedExisting;
       let protocolId = existing?.id;
       if (!protocolId) {
         const { data, error } = await db.from("differentiation_protocols").insert({ name, expected_duration_days: Math.max(...rows.filter((row) => row.protocolName === name).map((row) => row.day)), version: "Imported" }).select("id").single();
@@ -3942,11 +4042,13 @@ function setupTabs() {
 }
 
 function setActiveView(viewId) {
+  let activeTab = null;
   document.querySelectorAll(".tab").forEach((item) => {
     const isActive = item.dataset.view === viewId;
     item.classList.toggle("is-active", isActive);
     item.setAttribute("aria-selected", String(isActive));
     item.tabIndex = isActive ? 0 : -1;
+    if (isActive) activeTab = item;
   });
   document.querySelectorAll(".nav-group").forEach((group) => {
     group.classList.toggle("has-active-tab", Boolean(group.querySelector('.tab[aria-selected="true"]')));
@@ -3956,6 +4058,14 @@ function setActiveView(viewId) {
     view.classList.toggle("is-active", isActive);
     view.hidden = !isActive;
   });
+  if (activeTab) {
+    const tabs = activeTab.closest(".tabs");
+    const tabBounds = activeTab.getBoundingClientRect();
+    const tabsBounds = tabs?.getBoundingClientRect();
+    if (tabsBounds && (tabBounds.left < tabsBounds.left || tabBounds.right > tabsBounds.right)) {
+      activeTab.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    }
+  }
 }
 
 function bindBusyForm(form, handler) {
@@ -4213,6 +4323,8 @@ function setupForms() {
   });
   els.cultureCellLineCheckboxes.addEventListener("change", () => syncCultureNameSuggestion());
   els.cultureForm.elements.start_date.addEventListener("change", () => syncCultureNameSuggestion());
+  els.cellLineLibrarySearch?.addEventListener("input", renderCellLines);
+  els.protocolLibrarySearch?.addEventListener("input", renderDifferentiationProtocols);
   els.cellLinesList.addEventListener("click", handleCellLineListClick);
   els.culturesList.addEventListener("click", handleCulturesListClick);
   els.activeCulturesList.addEventListener("click", handleCulturesListClick);

@@ -38,6 +38,14 @@
   gap: 8px;
 }
 
+.scanner-stage.is-hidden {
+  display: none;
+}
+
+.scanner-stage.is-pending video {
+  display: none;
+}
+
 .scanner-stage video {
   width: 100%;
   max-height: 260px;

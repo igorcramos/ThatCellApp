@@ -5,6 +5,7 @@ const reagentOpsState = {
   scannerTimer: null,
   scannerBusy: false,
   scannerDecoder: null,
+  scannerRequestId: 0,
 };
 
 const reagentOpsEls = {
@@ -86,6 +87,7 @@ function scannerIsEmbedded() {
 function renderScannerReadiness() {
   const readiness = window.BarcodeScanner?.scannerReadiness(window) || "decoder-unavailable";
   reagentOpsEls.scanStart.disabled = readiness !== "ready";
+  reagentOpsEls.scanStop.disabled = true;
   if (readiness === "ready") {
     setScannerStatus("Ready to scan. The browser will ask for camera permission the first time.");
   } else if (readiness === "insecure") {
@@ -174,6 +176,7 @@ function lookupReagentCode(rawValue) {
 }
 
 function stopReagentScanner(message = "Camera stopped.") {
+  reagentOpsState.scannerRequestId += 1;
   if (reagentOpsState.scannerTimer) window.clearTimeout(reagentOpsState.scannerTimer);
   reagentOpsState.scannerTimer = null;
   reagentOpsState.scannerStream?.getTracks().forEach((track) => track.stop());
@@ -182,6 +185,9 @@ function stopReagentScanner(message = "Camera stopped.") {
   reagentOpsState.scannerDecoder = null;
   reagentOpsEls.scanVideo.srcObject = null;
   reagentOpsEls.scanStage.classList.add("is-hidden");
+  reagentOpsEls.scanStage.classList.remove("is-pending");
+  reagentOpsEls.scanStop.disabled = true;
+  reagentOpsEls.scanStart.disabled = window.BarcodeScanner?.scannerReadiness(window) !== "ready";
   reagentOpsState.scannerBusy = false;
   if (message) setScannerStatus(message);
 }
@@ -215,29 +221,47 @@ async function startReagentScanner() {
     renderScannerReadiness();
     return;
   }
+  const requestId = reagentOpsState.scannerRequestId;
   reagentOpsEls.scanStart.disabled = true;
+  reagentOpsEls.scanStop.disabled = false;
+  reagentOpsEls.scanStage.classList.add("is-pending");
+  reagentOpsEls.scanStage.classList.remove("is-hidden");
   let phase = "decoder";
   try {
     setScannerStatus("Preparing the scanner…");
     const detector = await window.BarcodeScanner.createDecoder(window);
+    if (requestId !== reagentOpsState.scannerRequestId) {
+      detector.dispose?.();
+      return;
+    }
     reagentOpsState.scannerDecoder = detector;
     phase = "camera";
     setScannerStatus("Requesting camera access… Approve the browser prompt to continue.");
     const stream = await window.BarcodeScanner.requestCameraStream(navigator.mediaDevices);
+    if (requestId !== reagentOpsState.scannerRequestId) {
+      stream?.getTracks?.().forEach((track) => track.stop());
+      detector.dispose?.();
+      return;
+    }
     reagentOpsState.scannerStream = stream;
     reagentOpsEls.scanVideo.srcObject = stream;
-    reagentOpsEls.scanStage.classList.remove("is-hidden");
+    reagentOpsEls.scanStage.classList.remove("is-pending");
     phase = "video";
     await reagentOpsEls.scanVideo.play();
+    if (requestId !== reagentOpsState.scannerRequestId) return;
     setScannerStatus("Point the rear camera at a barcode or QR code.");
     scanVideoFrame(detector);
   } catch (error) {
+    if (requestId !== reagentOpsState.scannerRequestId) return;
     stopReagentScanner("");
     setScannerStatus(phase === "decoder"
       ? "The barcode scanner could not initialize. Refresh the page, take or choose a photo, or type the printed code."
       : cameraFailureStatus(error), true);
   } finally {
-    reagentOpsEls.scanStart.disabled = window.BarcodeScanner?.scannerReadiness(window) !== "ready";
+    if (requestId === reagentOpsState.scannerRequestId) {
+      reagentOpsEls.scanStart.disabled = Boolean(reagentOpsState.scannerStream)
+        || window.BarcodeScanner?.scannerReadiness(window) !== "ready";
+    }
   }
 }
 
@@ -549,7 +573,7 @@ function purchaseStatusBadge(status) {
 function purchaseActionsMarkup(request) {
   if (request.status === "requested") return `<div class="purchase-actions"><input data-purchase-reviewer placeholder="Reviewer name" aria-label="Reviewer name"><button class="secondary-button purchase-action-button" data-purchase-action="approve" type="button">Approve</button><button class="secondary-button danger-button purchase-action-button" data-purchase-action="reject" type="button">Reject</button><button class="secondary-button purchase-action-button" data-purchase-action="cancel" type="button">Cancel</button></div>`;
   if (request.status === "approved") return `<div class="purchase-actions"><input data-purchase-order placeholder="Order / PO number" aria-label="Order or purchase order number"><button class="secondary-button purchase-action-button" data-purchase-action="order" type="button">Mark ordered</button><button class="secondary-button purchase-action-button" data-purchase-action="cancel" type="button">Cancel</button></div>`;
-  if (request.status === "ordered") return `<div class="receipt-fields"><label>Lot<input data-receipt="lot" placeholder="Lot number"></label><label>Expires<input data-receipt="expiration" type="date"></label><label>Quantity<input data-receipt="quantity" type="number" min="0" step="any" value="${escapeHtml(request.approved_quantity || request.requested_quantity)}"></label><label>Unit<input data-receipt="unit" value="${escapeHtml(request.unit)}"></label><label>Location<input data-receipt="location" required placeholder="Fridge / rack / box"></label><label>Container code<input data-receipt="barcode"></label><label>Received by<input data-receipt="receiver" required></label><button class="primary-button purchase-action-button" data-purchase-action="receive" type="button">Receive into stock</button></div>`;
+  if (request.status === "ordered") return `<div class="receipt-fields"><label>Lot<input data-receipt="lot" placeholder="Lot number"></label><label>Expires<input data-receipt="expiration" type="date"></label><label>Quantity<input data-receipt="quantity" type="number" min="0.000001" step="any" value="${escapeHtml(request.approved_quantity || request.requested_quantity)}"></label><label>Unit<input data-receipt="unit" value="${escapeHtml(request.unit)}"></label><label>Location<input data-receipt="location" required placeholder="Fridge / rack / box"></label><label>Container code<input data-receipt="barcode"></label><label>Received by<input data-receipt="receiver" required></label><button class="primary-button purchase-action-button" data-purchase-action="receive" type="button">Receive into stock</button></div>`;
   return "";
 }
 
@@ -577,9 +601,14 @@ async function loadPurchaseRequests() {
 async function handlePurchaseSubmit(event) {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
+  const requestedQuantity = Number(data.get("requested_quantity"));
+  if (!Number.isFinite(requestedQuantity) || requestedQuantity <= 0) {
+    showToast("Enter a requested quantity greater than zero.");
+    return;
+  }
   const payload = {
     catalog_reagent_id: data.get("catalog_reagent_id"),
-    requested_quantity: Number(data.get("requested_quantity")),
+    requested_quantity: requestedQuantity,
     unit: reagentCode(data.get("unit")),
     requester_name: reagentCode(data.get("requester_name")),
     vendor: valueOrNull(data.get("vendor")),
@@ -628,7 +657,7 @@ async function handlePurchaseAction(event) {
   } else if (action === "receive") {
     const field = (name) => card.querySelector(`[data-receipt="${name}"]`)?.value || "";
     const quantity = Number(field("quantity"));
-    if (!quantity || !reagentCode(field("unit")) || !reagentCode(field("location")) || !reagentCode(field("receiver"))) {
+    if (!Number.isFinite(quantity) || quantity <= 0 || !reagentCode(field("unit")) || !reagentCode(field("location")) || !reagentCode(field("receiver"))) {
       showToast("Quantity, unit, location, and receiver are required.");
       button.disabled = false;
       return;
