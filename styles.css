@@ -357,6 +357,10 @@ main {
   font-weight: 800;
 }
 
+.admin-only.is-hidden {
+  display: none !important;
+}
+
 .view {
   display: none;
 }
@@ -485,6 +489,11 @@ label {
   padding: 6px 8px;
   border-radius: 6px;
   background: var(--surface);
+}
+
+.compact-checkbox-grid {
+  max-height: 220px;
+  overflow: auto;
 }
 
 .conditional-grid {
@@ -699,6 +708,69 @@ a:focus-visible,
 
 .project-section strong {
   color: var(--text);
+}
+
+.member-toolbar {
+  align-items: center;
+}
+
+.member-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.member-filters input,
+.member-filters select {
+  width: min(220px, 100%);
+}
+
+.member-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.member-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.member-active-toggle {
+  display: inline-flex;
+  grid-auto-flow: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.member-active-toggle input {
+  width: 18px;
+  min-height: 18px;
+  accent-color: var(--accent);
+}
+
+.member-settings-grid,
+.member-access-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.member-lab-grid {
+  display: grid;
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.member-access-grid {
+  align-items: start;
 }
 
 .item-title {
@@ -1610,8 +1682,20 @@ button[aria-busy="true"]::after {
 
   .form-grid,
   .conditional-grid,
-  .checkbox-grid {
+  .checkbox-grid,
+  .member-settings-grid,
+  .member-access-grid {
     grid-template-columns: 1fr;
+  }
+
+  .member-card {
+    grid-template-columns: 1fr;
+  }
+
+  .member-filters,
+  .member-filters input,
+  .member-filters select {
+    width: 100%;
   }
 
   .checkbox-grid .checkbox-label,

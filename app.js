@@ -62,6 +62,8 @@ const statusClass = {
 };
 
 const defaultProjects = ["TBCK", "APOE-TAU"];
+const defaultLabs = ["Victor Lab", "Rita Lab"];
+const AUTH_PENDING_LAB_KEY = "thatcellapp.pendingLabName";
 
 const projectColors = {
   TBCK: "#176f64",
@@ -84,6 +86,10 @@ const differentiationBatchColors = Object.freeze([
 const els = {
   authPanel: document.querySelector("#authPanel"),
   authForm: document.querySelector("#authForm"),
+  authLabControls: document.querySelector("#authLabControls"),
+  authLabSelect: document.querySelector("#authLabSelect"),
+  customAuthLabLabel: document.querySelector("#customAuthLabLabel"),
+  customAuthLabName: document.querySelector("#customAuthLabName"),
   authOtpForm: document.querySelector("#authOtpForm"),
   authMessage: document.querySelector("#authMessage"),
   authFileWarning: document.querySelector("#authFileWarning"),
@@ -96,6 +102,9 @@ const els = {
   connectionStatus: document.querySelector("#connectionStatus"),
   lastUpdated: document.querySelector("#lastUpdated"),
   appIssues: document.querySelector("#appIssues"),
+  membersList: document.querySelector("#membersList"),
+  memberSearchInput: document.querySelector("#memberSearchInput"),
+  memberLabFilter: document.querySelector("#memberLabFilter"),
   cellLineForm: document.querySelector("#cellLineForm"),
   cultureForm: document.querySelector("#cultureForm"),
   vesselForm: document.querySelector("#vesselForm"),
@@ -396,6 +405,56 @@ function profileName(profile) {
   return profile?.full_name || profile?.email || "";
 }
 
+function profileLabs(profile) {
+  const labs = Array.isArray(profile?.lab_names) ? profile.lab_names : [];
+  return uniqueValues([...labs, valueOrNull(profile?.lab_name)]);
+}
+
+function profileLab(profile) {
+  return profileLabs(profile).join(", ") || "No lab assigned";
+}
+
+function selectedAuthLabName() {
+  const selected = valueOrNull(els.authLabSelect?.value);
+  if (selected === "__add") return valueOrNull(els.customAuthLabName?.value);
+  return selected;
+}
+
+function pendingAuthLabName() {
+  try {
+    return valueOrNull(window.localStorage?.getItem(AUTH_PENDING_LAB_KEY));
+  } catch {
+    return null;
+  }
+}
+
+function storePendingAuthLabName(labName) {
+  try {
+    if (labName) window.localStorage?.setItem(AUTH_PENDING_LAB_KEY, labName);
+  } catch {
+    // Local storage can be unavailable in strict browser modes.
+  }
+}
+
+function clearPendingAuthLabName() {
+  try {
+    window.localStorage?.removeItem(AUTH_PENDING_LAB_KEY);
+  } catch {
+    // Nothing to clear.
+  }
+}
+
+function requireAuthLabSelection() {
+  const labName = selectedAuthLabName();
+  if (!labName) {
+    setAuthMessage("Choose a lab before signing in.", true);
+    els.authLabSelect?.focus();
+    return null;
+  }
+  storePendingAuthLabName(labName);
+  return labName;
+}
+
 function memberCheckboxesHtml(selectedIds = []) {
   const selected = new Set(selectedIds.filter(Boolean));
   if (!state.profiles.length) {
@@ -424,6 +483,18 @@ function cultureMemberIds(cultureId) {
   return state.cultureMembers
     .filter((member) => member.culture_id === cultureId)
     .map((member) => member.user_id);
+}
+
+function projectIdsForMember(userId) {
+  return state.projectMembers
+    .filter((member) => member.user_id === userId)
+    .map((member) => member.project_id);
+}
+
+function cultureIdsForMember(userId) {
+  return state.cultureMembers
+    .filter((member) => member.user_id === userId)
+    .map((member) => member.culture_id);
 }
 
 function memberNames(ids) {
@@ -2345,6 +2416,135 @@ function renderProjects() {
     .join("");
 }
 
+function availableLabs(extraLabs = []) {
+  return uniqueValues([
+    ...defaultLabs,
+    ...state.profiles.flatMap(profileLabs),
+    ...extraLabs,
+  ]).sort((a, b) => a.localeCompare(b));
+}
+
+function labCheckboxesHtml(selectedLabs = []) {
+  const selected = new Set(selectedLabs);
+  const labs = availableLabs(selectedLabs);
+  return labs.map((lab) => `
+    <label class="checkbox-label">
+      <input type="checkbox" data-member-lab-checkbox value="${escapeHtml(lab)}" ${selected.has(lab) ? "checked" : ""}>
+      ${escapeHtml(lab)}
+    </label>
+  `).join("");
+}
+
+function renderMemberFilters() {
+  if (!els.memberLabFilter) return;
+  const current = els.memberLabFilter.value;
+  const labs = availableLabs();
+  els.memberLabFilter.innerHTML = `
+    <option value="">All labs</option>
+    ${labs.map((lab) => `<option value="${escapeHtml(lab)}">${escapeHtml(lab)}</option>`).join("")}
+  `;
+  els.memberLabFilter.value = labs.includes(current) ? current : "";
+}
+
+function renderMembers() {
+  if (!els.membersList) return;
+  if (!isAdmin()) {
+    els.membersList.innerHTML = "";
+    return;
+  }
+
+  renderMemberFilters();
+  const query = valueOrNull(els.memberSearchInput?.value)?.toLocaleLowerCase() || "";
+  const labFilter = valueOrNull(els.memberLabFilter?.value);
+  const members = state.profiles
+    .filter((profile) => {
+      const haystack = [profileName(profile), profile.email, profileLab(profile)].join(" ").toLocaleLowerCase();
+      return (!query || haystack.includes(query)) && (!labFilter || profileLabs(profile).includes(labFilter));
+    })
+    .sort((a, b) => profileName(a).localeCompare(profileName(b)));
+
+  if (!members.length) {
+    els.membersList.innerHTML = '<div class="empty-state">No members match this view.</div>';
+    return;
+  }
+
+  const projectOptions = state.projects.filter((project) => project.id);
+  els.membersList.innerHTML = members
+    .map((profile) => {
+      const selectedProjects = new Set(projectIdsForMember(profile.id));
+      const selectedCultures = new Set(cultureIdsForMember(profile.id));
+      const selectedLabs = profileLabs(profile);
+      const memberProjectHtml = projectOptions.length
+        ? projectOptions.map((project) => `
+          <label class="checkbox-label">
+            <input type="checkbox" data-member-project value="${project.id}" ${selectedProjects.has(project.id) ? "checked" : ""}>
+            ${escapeHtml(project.name)}
+          </label>
+        `).join("")
+        : '<div class="empty-state">No saved projects yet.</div>';
+      const memberCultureHtml = state.cultures.length
+        ? state.cultures.map((culture) => `
+          <label class="checkbox-label">
+            <input type="checkbox" data-member-culture value="${culture.id}" ${selectedCultures.has(culture.id) ? "checked" : ""}>
+            ${escapeHtml(cultureDisplayName(culture))}
+          </label>
+        `).join("")
+        : '<div class="empty-state">No cultures yet.</div>';
+      return `
+        <article class="item member-card" data-member-id="${profile.id}">
+          <div>
+            <div class="member-card-header">
+              <div>
+                <div class="item-title">${escapeHtml(profileName(profile) || "Unnamed member")}</div>
+                <div class="item-meta">
+                  <span>${escapeHtml(profile.email || "No email")}</span>
+                  <span>${escapeHtml(profile.role || "member")}</span>
+                  <span>${profile.is_active ? "Active" : "Pending access"}</span>
+                  <span>${escapeHtml(profileLab(profile))}</span>
+                </div>
+              </div>
+              <label class="member-active-toggle">
+                <input type="checkbox" data-member-active ${profile.is_active ? "checked" : ""}>
+                Active
+              </label>
+            </div>
+            <div class="member-settings-grid">
+              <label>
+                Role
+                <select data-member-role>
+                  <option value="member" ${profile.role !== "admin" ? "selected" : ""}>Member</option>
+                  <option value="admin" ${profile.role === "admin" ? "selected" : ""}>Admin</option>
+                </select>
+              </label>
+              <label>
+                Add another lab
+                <input data-member-custom-lab placeholder="Example: Core Lab">
+              </label>
+            </div>
+            <div class="member-lab-grid">
+              <div class="field-label">Labs</div>
+              <div class="checkbox-grid compact-checkbox-grid">${labCheckboxesHtml(selectedLabs)}</div>
+            </div>
+            <div class="member-access-grid">
+              <div>
+                <div class="field-label">Projects</div>
+                <div class="checkbox-grid compact-checkbox-grid">${memberProjectHtml}</div>
+              </div>
+              <div>
+                <div class="field-label">Cultures</div>
+                <div class="checkbox-grid compact-checkbox-grid">${memberCultureHtml}</div>
+              </div>
+            </div>
+          </div>
+          <div class="item-actions">
+            <button class="secondary-button" data-save-member type="button">Save</button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
 function renderMetrics() {
   els.lineCount.textContent = state.cellLines.length;
   els.activeCultureCount.textContent = state.cultures.filter((culture) => culture.status === "active").length;
@@ -2426,6 +2626,8 @@ function renderAuthState() {
   });
   els.authPanel?.classList.toggle("is-hidden", !requiresSignIn || (signedIn && !accessPending));
   els.userStrip?.classList.toggle("is-hidden", !requiresSignIn || !signedIn);
+  els.googleSignInButton?.classList.toggle("is-hidden", accessPending);
+  els.authLabControls?.classList.toggle("is-hidden", accessPending);
   els.authForm?.classList.toggle("is-hidden", accessPending);
   els.authOtpForm?.closest(".auth-code-panel")?.classList.toggle("is-hidden", accessPending);
   const authTitle = document.querySelector("#authTitle");
@@ -2462,32 +2664,60 @@ function renderAll() {
   renderCalendarRunFilters();
   renderEvents();
   renderProjects();
+  renderMembers();
   renderMetrics();
 }
 
 async function ensureCurrentProfile() {
   const user = state.user;
   if (!user) return;
+  const labName = pendingAuthLabName();
 
   const { data } = await db
     .from("profiles")
-    .select("id")
+    .select("id, lab_name, lab_names")
     .eq("id", user.id)
     .maybeSingle();
-  if (data?.id) return;
+  if (data?.id) {
+    if (labName && !profileLabs(data).includes(labName)) {
+      const updatedLabs = uniqueValues([...profileLabs(data), labName]);
+      const { error } = await db.from("profiles").update({ lab_name: updatedLabs[0], lab_names: updatedLabs }).eq("id", user.id);
+      if (error && !isMissingColumnError(error, "lab_names") && !isMissingColumnError(error, "lab_name")) throw error;
+      if (!error) clearPendingAuthLabName();
+    }
+    return;
+  }
 
   const fallbackName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split("@")[0] || "User";
-  const { error } = await db.from("profiles").insert({
+  const profilePayload = {
     id: user.id,
     email: user.email,
     full_name: fallbackName,
     role: "member",
-  });
+  };
+  if (labName) {
+    profilePayload.lab_name = labName;
+    profilePayload.lab_names = [labName];
+  }
+  let { error } = await db.from("profiles").insert(profilePayload);
+  if (error && isMissingColumnError(error, "lab_names")) {
+    delete profilePayload.lab_names;
+    ({ error } = await db.from("profiles").insert(profilePayload));
+  }
+  if (error && isMissingColumnError(error, "lab_name")) {
+    delete profilePayload.lab_name;
+    ({ error } = await db.from("profiles").insert(profilePayload));
+  }
   if (error && error.code !== "23505") throw error;
+  if (!error) clearPendingAuthLabName();
 }
 
 function isMissingTableError(error) {
   return error?.code === "PGRST205" || /Could not find the table/i.test(error?.message || "");
+}
+
+function isMissingColumnError(error, columnName) {
+  return error?.code === "PGRST204" || new RegExp(`\\b${columnName}\\b.*column|column.*\\b${columnName}\\b`, "i").test(error?.message || "");
 }
 
 async function detectAuthTables() {
@@ -4194,6 +4424,12 @@ function setAuthMessage(message, isError = false) {
 
 async function handleGoogleSignIn() {
   if (!ensureDb()) return;
+  const labName = requireAuthLabSelection();
+  if (!labName) return;
+  if (window.location.protocol === "file:") {
+    setAuthMessage("Open the published app before using Google sign-in so your lab choice is saved.", true);
+    return;
+  }
   const redirectTo = authRedirectUrl();
   els.googleSignInButton.disabled = true;
   const { error } = await db.auth.signInWithOAuth({
@@ -4215,10 +4451,12 @@ async function handleMagicLink(event) {
   event?.preventDefault();
   if (!ensureDb()) return;
   const email = valueOrNull(els.authForm.elements.email.value);
+  const labName = requireAuthLabSelection();
   if (!email) {
     setAuthMessage("Enter your work email first.", true);
     return;
   }
+  if (!labName) return;
 
   const emailRedirectTo = authRedirectUrl();
   els.magicLinkButton.disabled = true;
@@ -4227,7 +4465,7 @@ async function handleMagicLink(event) {
     options: {
       emailRedirectTo,
       shouldCreateUser: true,
-      data: { full_name: email.split("@")[0] },
+      data: { full_name: email.split("@")[0], lab_name: labName },
     },
   });
   els.magicLinkButton.disabled = false;
@@ -4270,6 +4508,74 @@ async function handleSignOut() {
   setStatus("error", "Sign in");
 }
 
+async function syncMemberAccess(userId, projectIds, cultureIds) {
+  const { error: projectDeleteError } = await db.from("project_members").delete().eq("user_id", userId);
+  if (projectDeleteError) throw projectDeleteError;
+  if (projectIds.length) {
+    const { error } = await db.from("project_members").insert(projectIds.map((projectId) => ({ project_id: projectId, user_id: userId })));
+    if (error) throw error;
+  }
+
+  const { error: cultureDeleteError } = await db.from("culture_members").delete().eq("user_id", userId);
+  if (cultureDeleteError) throw cultureDeleteError;
+  if (cultureIds.length) {
+    const { error } = await db.from("culture_members").insert(cultureIds.map((cultureId) => ({ culture_id: cultureId, user_id: userId })));
+    if (error) throw error;
+  }
+}
+
+async function handleMemberSave(button) {
+  if (!ensureDb() || !isAdmin()) return;
+  const card = button.closest("[data-member-id]");
+  const userId = card?.dataset.memberId;
+  if (!userId) return;
+
+  const role = card.querySelector("[data-member-role]")?.value === "admin" ? "admin" : "member";
+  const isActive = Boolean(card.querySelector("[data-member-active]")?.checked);
+  const customLabName = valueOrNull(card.querySelector("[data-member-custom-lab]")?.value);
+  const labNames = uniqueValues([
+    ...Array.from(card.querySelectorAll("[data-member-lab-checkbox]:checked")).map((input) => input.value),
+    customLabName,
+  ]);
+  const primaryLabName = labNames[0] || null;
+  const projectIds = Array.from(card.querySelectorAll("[data-member-project]:checked")).map((input) => input.value);
+  const cultureIds = Array.from(card.querySelectorAll("[data-member-culture]:checked")).map((input) => input.value);
+
+  if (userId === currentUserId() && (role !== "admin" || !isActive)) {
+    showToast("You cannot remove your own admin access here.");
+    renderMembers();
+    return;
+  }
+
+  button.disabled = true;
+  try {
+    const { error } = await db.rpc("admin_update_profile", {
+      profile_id_arg: userId,
+      lab_name_arg: primaryLabName,
+      lab_names_arg: labNames,
+      role_arg: role,
+      is_active_arg: isActive,
+    });
+    if (error) throw error;
+    await syncMemberAccess(userId, projectIds, cultureIds);
+    showToast("Member access saved.");
+    await loadAll();
+  } catch (error) {
+    showToast(`Could not save member access: ${error.message}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function handleMembersListClick(event) {
+  const saveButton = event.target.closest("[data-save-member]");
+  if (saveButton) handleMemberSave(saveButton);
+}
+
+function handleMembersListChange(event) {
+  if (event.target.closest("[data-member-lab-checkbox]")) renderMemberFilters();
+}
+
 async function initAuth() {
   if (!ensureDb()) {
     renderAll();
@@ -4279,6 +4585,7 @@ async function initAuth() {
   els.authOtpForm?.addEventListener("submit", handleOtpVerification);
   els.googleSignInButton?.addEventListener("click", handleGoogleSignIn);
   els.signOutButton?.addEventListener("click", handleSignOut);
+  els.authLabSelect?.addEventListener("change", syncConditionalFields);
   db.auth.onAuthStateChange((event, session) => {
     if (!state.authAvailable) return;
     state.session = session || null;
@@ -4295,6 +4602,10 @@ async function initAuth() {
 
 function setupForms() {
   setupProgressiveDisclosure();
+  els.membersList?.addEventListener("click", handleMembersListClick);
+  els.membersList?.addEventListener("change", handleMembersListChange);
+  els.memberSearchInput?.addEventListener("input", renderMembers);
+  els.memberLabFilter?.addEventListener("change", renderMembers);
   renderDifferentiationColorPalette();
   els.differentiationColorPalette?.addEventListener("click", (event) => {
     const swatch = event.target.closest("[data-batch-color]");
@@ -5073,6 +5384,7 @@ function resetCryoBoxForm() {
 }
 
 function syncConditionalFields() {
+  els.customAuthLabLabel?.classList.toggle("is-hidden", els.authLabSelect?.value !== "__add");
   els.customSpeciesLabel.classList.toggle("is-hidden", els.speciesSelect.value !== "__add");
   els.customCellTypeLabel.classList.toggle("is-hidden", els.cellTypeSelect.value !== "__add");
   els.customCryoCellTypeLabel.classList.toggle("is-hidden", els.cryoCellTypeSelect.value !== "__add");

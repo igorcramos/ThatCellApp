@@ -8,7 +8,7 @@
     <link rel="shortcut icon" type="image/png" href="assets/logo-cell-pin.png?v=20260813a">
     <link rel="apple-touch-icon" href="assets/logo-cell-pin.png?v=20260813a">
     <meta name="theme-color" content="#176f64">
-    <link rel="stylesheet" href="styles.css?v=20260813a">
+    <link rel="stylesheet" href="styles.css?v=20260813c">
     <link rel="stylesheet" href="reagent-operations.css?v=20260812a">
     <link rel="stylesheet" href="culture-media.css?v=20260812b">
   </head>
@@ -49,6 +49,21 @@
           <span class="google-mark" aria-hidden="true">G</span>
           Continue with Google
         </button>
+        <div class="auth-form" id="authLabControls">
+          <label>
+            Lab
+            <select id="authLabSelect" name="lab_name" required>
+              <option value="">Choose lab</option>
+              <option value="Victor Lab">Victor Lab</option>
+              <option value="Rita Lab">Rita Lab</option>
+              <option value="__add">Add...</option>
+            </select>
+          </label>
+          <label class="is-hidden" id="customAuthLabLabel">
+            New lab name
+            <input name="custom_lab_name" id="customAuthLabName" placeholder="Example: Core Lab">
+          </label>
+        </div>
         <div class="auth-divider"><span>or use email</span></div>
         <form id="authForm" class="auth-form">
           <label>
@@ -105,6 +120,7 @@
         <div class="nav-group-tabs" role="presentation">
           <button class="tab" data-view="eventsView" type="button">Activity</button>
           <button class="tab" data-view="projectsView" type="button">Projects</button>
+          <button class="tab admin-only is-hidden" data-view="membersView" type="button">Members</button>
         </div>
       </div>
     </nav>
@@ -705,6 +721,27 @@
             <select id="projectViewFilter" aria-label="Filter project overview"></select>
           </div>
           <div id="projectsList" class="item-list"></div>
+        </div>
+      </section>
+
+      <section class="view admin-only is-hidden" id="membersView">
+        <div class="section-heading">
+          <div>
+            <h2>Member management</h2>
+            <p>Approve people, set their lab, and assign access to projects and cultures.</p>
+          </div>
+        </div>
+        <div class="table-panel">
+          <div class="panel-title-row member-toolbar">
+            <h3>Registered members</h3>
+            <div class="member-filters">
+              <input id="memberSearchInput" type="search" placeholder="Search members" aria-label="Search members">
+              <select id="memberLabFilter" aria-label="Filter members by lab">
+                <option value="">All labs</option>
+              </select>
+            </div>
+          </div>
+          <div id="membersList" class="item-list member-list"></div>
         </div>
       </section>
 
@@ -1639,7 +1676,7 @@
     <script src="barcode-scanner.js?v=20260810a"></script>
     <script src="schedule-calendar.js?v=20260809a"></script>
     <script src="shared-library.js?v=20260812b"></script>
-    <script src="app.js?v=20260813a"></script>
+    <script src="app.js?v=20260813c"></script>
     <script src="reagent-inventory.js?v=20260805b"></script>
     <script src="reagent-checklists.js?v=20260812a"></script>
     <script src="reagent-operations.js?v=20260812a"></script>

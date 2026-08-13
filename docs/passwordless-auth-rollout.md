@@ -37,6 +37,8 @@ first does not interrupt the current public prototype mode.
    1. `supabase/2026-08-04_reagent_inventory.sql` (already run)
    2. `supabase/2026-08-05_reagent_operations.sql`
    3. `supabase/2026-08-06_secure_passwordless_auth.sql`
+   4. `supabase/2026-08-13_member_labs_access.sql`
+   5. `supabase/2026-08-13_member_multi_labs_admin.sql`
 8. Before running step 7.3, replace both occurrences of
    `YOUR_ADMIN_EMAIL@example.com` with the exact lowercase admin email. The file
    is transactional and stops before activation when the placeholder is left in

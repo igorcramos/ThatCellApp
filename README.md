@@ -41,13 +41,19 @@ Simple web app for cell culture tracking using Supabase.
 14. Run `supabase/2026-08-11_automatic_deviation_detection.sql` so overdue or
     early task completion is detected, linked to Activity, and optionally shifts
     downstream protocol work.
+15. Run `supabase/2026-08-13_member_labs_access.sql` to add Lab selection for
+    new users and the admin-only member management screen.
+16. Run `supabase/2026-08-13_member_multi_labs_admin.sql` to allow members in
+    more than one lab and activate the configured admin for both default labs.
 
 ## Login options
 
 The secure mode uses Supabase Auth with Google sign-in as the primary path, plus
 email magic links or optional one-time codes as a backup. The app does not
 request or store passwords. Sessions persist on the current device, and new
-users remain pending until an administrator assigns project access.
+users remain pending until an administrator assigns project or culture access.
+New sign-ins choose a Lab during registration; admins can later adjust lab,
+status, role, and item access from the Members tab.
 
 Google sign-in also requires provider setup outside this repo:
 
