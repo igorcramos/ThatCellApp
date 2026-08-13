@@ -4,103 +4,86 @@
 
 begin;
 
-do $$
-declare
-  v_recipe_id uuid;
-begin
-  insert into public.culture_media_recipes (name, version, solvent_name, description, notes, is_active)
-  values ('2X Pre-Neural Induction Medium', '1.0', 'mTeSR1', 'Two-fold pre-neural induction formulation.', 'After adding the 2X medium, the final culture concentrations must be 10 µM SB431542 and 1 µM Dorsomorphin.', true)
-  on conflict do nothing;
-  select id into v_recipe_id from public.culture_media_recipes where lower(name) = lower('2X Pre-Neural Induction Medium') and lower(version) = '1.0';
-  insert into public.culture_media_components (recipe_id, name, calculation_mode, stock_value, stock_unit, target_value, target_unit, sort_order, notes)
-  values
-    (v_recipe_id, 'Penicillin–Streptomycin', 'dilution', 100, 'X', 1, 'X', 1, null),
-    (v_recipe_id, 'SB431542', 'dilution', null, null, 20, 'µM', 2, 'Stock concentration pending.'),
-    (v_recipe_id, 'Dorsomorphin', 'dilution', null, null, 2, 'µM', 3, 'Stock concentration pending.')
-  on conflict (recipe_id, name) do update set target_value = excluded.target_value, target_unit = excluded.target_unit, stock_value = excluded.stock_value, stock_unit = excluded.stock_unit, sort_order = excluded.sort_order, notes = excluded.notes;
+insert into public.culture_media_recipes
+  (name, version, solvent_name, description, notes, is_active)
+values
+  ('2X Pre-Neural Induction Medium', '1.0', 'mTeSR1', 'Two-fold pre-neural induction formulation.', 'After adding the 2X medium, the final culture concentrations must be 10 µM SB431542 and 1 µM Dorsomorphin.', true),
+  ('Pre-Neural Induction Medium', '1.0', 'mTeSR1', 'Pre-neural induction formulation.', null, true),
+  ('Medium 1 — Neural Induction', '1.0', 'Neurobasal medium', 'Neural induction medium.', null, true),
+  ('Medium 2 + FGF2 — NPC Expansion', '1.0', 'Neurobasal medium', 'Neural progenitor cell expansion medium.', null, true),
+  ('Medium 2 + FGF2 + EGF — NPC Expansion', '1.0', 'Neurobasal medium', 'Neural progenitor cell expansion medium with FGF2 and EGF.', null, true),
+  ('Medium 3 — Maturation and Gliogenesis', '1.0', 'Neurobasal medium', 'Maturation, gliogenesis, and promotion of neural activity.', null, true),
+  ('Medium 2 — Organoid Maintenance', '1.0', 'Neurobasal medium', 'Cortical organoid maintenance medium.', null, true)
+on conflict do nothing;
 
-  insert into public.culture_media_recipes (name, version, solvent_name, description, is_active)
-  values ('Pre-Neural Induction Medium', '1.0', 'mTeSR1', 'Pre-neural induction formulation.', true)
-  on conflict do nothing;
-  select id into v_recipe_id from public.culture_media_recipes where lower(name) = lower('Pre-Neural Induction Medium') and lower(version) = '1.0';
-  insert into public.culture_media_components (recipe_id, name, calculation_mode, stock_value, stock_unit, target_value, target_unit, sort_order, notes)
+with component_seed (
+  recipe_name, component_name, calculation_mode, stock_value, stock_unit,
+  target_value, target_unit, sort_order, notes
+) as (
   values
-    (v_recipe_id, 'Penicillin–Streptomycin', 'dilution', 100, 'X', 1, 'X', 1, null),
-    (v_recipe_id, 'SB431542', 'dilution', null, null, 10, 'µM', 2, 'Stock concentration pending.'),
-    (v_recipe_id, 'Dorsomorphin', 'dilution', null, null, 1, 'µM', 3, 'Stock concentration pending.')
-  on conflict (recipe_id, name) do update set target_value = excluded.target_value, target_unit = excluded.target_unit, stock_value = excluded.stock_value, stock_unit = excluded.stock_unit, sort_order = excluded.sort_order, notes = excluded.notes;
+    ('2X Pre-Neural Induction Medium', 'Penicillin–Streptomycin', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 1, null),
+    ('2X Pre-Neural Induction Medium', 'SB431542', 'dilution', null::numeric, null, 20::numeric, 'µM', 2, 'Stock concentration pending.'),
+    ('2X Pre-Neural Induction Medium', 'Dorsomorphin', 'dilution', null::numeric, null, 2::numeric, 'µM', 3, 'Stock concentration pending.'),
 
-  insert into public.culture_media_recipes (name, version, solvent_name, description, is_active)
-  values ('Medium 1 — Neural Induction', '1.0', 'Neurobasal medium', 'Neural induction medium.', true)
-  on conflict do nothing;
-  select id into v_recipe_id from public.culture_media_recipes where lower(name) = lower('Medium 1 — Neural Induction') and lower(version) = '1.0';
-  insert into public.culture_media_components (recipe_id, name, calculation_mode, stock_value, stock_unit, target_value, target_unit, sort_order, notes)
-  values
-    (v_recipe_id, 'GlutaMAX', 'dilution', null, null, 1, 'X', 1, 'Stock concentration pending.'),
-    (v_recipe_id, 'B27', 'percent_vv', null, null, 1, '% v/v', 2, null),
-    (v_recipe_id, 'N2', 'percent_vv', null, null, 1, '% v/v', 3, null),
-    (v_recipe_id, 'MEM-NEAA', 'dilution', null, null, 1, 'X', 4, 'Stock concentration pending.'),
-    (v_recipe_id, 'Penicillin–Streptomycin', 'dilution', 100, 'X', 1, 'X', 5, null),
-    (v_recipe_id, 'SB431542', 'dilution', null, null, 10, 'µM', 6, 'Stock concentration pending.'),
-    (v_recipe_id, 'Dorsomorphin', 'dilution', null, null, 1, 'µM', 7, 'Stock concentration pending.')
-  on conflict (recipe_id, name) do update set calculation_mode = excluded.calculation_mode, target_value = excluded.target_value, target_unit = excluded.target_unit, stock_value = excluded.stock_value, stock_unit = excluded.stock_unit, sort_order = excluded.sort_order, notes = excluded.notes;
+    ('Pre-Neural Induction Medium', 'Penicillin–Streptomycin', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 1, null),
+    ('Pre-Neural Induction Medium', 'SB431542', 'dilution', null::numeric, null, 10::numeric, 'µM', 2, 'Stock concentration pending.'),
+    ('Pre-Neural Induction Medium', 'Dorsomorphin', 'dilution', null::numeric, null, 1::numeric, 'µM', 3, 'Stock concentration pending.'),
 
-  insert into public.culture_media_recipes (name, version, solvent_name, description, is_active)
-  values ('Medium 2 + FGF2 — NPC Expansion', '1.0', 'Neurobasal medium', 'Neural progenitor cell expansion medium.', true)
-  on conflict do nothing;
-  select id into v_recipe_id from public.culture_media_recipes where lower(name) = lower('Medium 2 + FGF2 — NPC Expansion') and lower(version) = '1.0';
-  insert into public.culture_media_components (recipe_id, name, calculation_mode, stock_value, stock_unit, target_value, target_unit, sort_order, notes)
-  values
-    (v_recipe_id, 'B27', 'percent_vv', null, null, 1, '% v/v', 1, null),
-    (v_recipe_id, 'GlutaMAX', 'dilution', null, null, 1, 'X', 2, 'Stock concentration pending.'),
-    (v_recipe_id, 'MEM-NEAA', 'dilution', null, null, 1, 'X', 3, 'Stock concentration pending.'),
-    (v_recipe_id, 'Penicillin–Streptomycin', 'dilution', 100, 'X', 1, 'X', 4, null),
-    (v_recipe_id, 'FGF2', 'dilution', null, null, 20, 'ng/mL', 5, 'Stock concentration pending.')
-  on conflict (recipe_id, name) do update set calculation_mode = excluded.calculation_mode, target_value = excluded.target_value, target_unit = excluded.target_unit, stock_value = excluded.stock_value, stock_unit = excluded.stock_unit, sort_order = excluded.sort_order, notes = excluded.notes;
+    ('Medium 1 — Neural Induction', 'GlutaMAX', 'dilution', null::numeric, null, 1::numeric, 'X', 1, 'Stock concentration pending.'),
+    ('Medium 1 — Neural Induction', 'B27', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 2, null),
+    ('Medium 1 — Neural Induction', 'N2', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 3, null),
+    ('Medium 1 — Neural Induction', 'MEM-NEAA', 'dilution', null::numeric, null, 1::numeric, 'X', 4, 'Stock concentration pending.'),
+    ('Medium 1 — Neural Induction', 'Penicillin–Streptomycin', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 5, null),
+    ('Medium 1 — Neural Induction', 'SB431542', 'dilution', null::numeric, null, 10::numeric, 'µM', 6, 'Stock concentration pending.'),
+    ('Medium 1 — Neural Induction', 'Dorsomorphin', 'dilution', null::numeric, null, 1::numeric, 'µM', 7, 'Stock concentration pending.'),
 
-  insert into public.culture_media_recipes (name, version, solvent_name, description, is_active)
-  values ('Medium 2 + FGF2 + EGF — NPC Expansion', '1.0', 'Neurobasal medium', 'Neural progenitor cell expansion medium with FGF2 and EGF.', true)
-  on conflict do nothing;
-  select id into v_recipe_id from public.culture_media_recipes where lower(name) = lower('Medium 2 + FGF2 + EGF — NPC Expansion') and lower(version) = '1.0';
-  insert into public.culture_media_components (recipe_id, name, calculation_mode, stock_value, stock_unit, target_value, target_unit, sort_order, notes)
-  values
-    (v_recipe_id, 'B27', 'percent_vv', null, null, 1, '% v/v', 1, null),
-    (v_recipe_id, 'GlutaMAX', 'dilution', null, null, 1, 'X', 2, 'Stock concentration pending.'),
-    (v_recipe_id, 'MEM-NEAA', 'dilution', null, null, 1, 'X', 3, 'Stock concentration pending.'),
-    (v_recipe_id, 'Penicillin–Streptomycin', 'dilution', 100, 'X', 1, 'X', 4, null),
-    (v_recipe_id, 'FGF2', 'dilution', null, null, 20, 'ng/mL', 5, 'Stock concentration pending.'),
-    (v_recipe_id, 'EGF', 'dilution', null, null, 20, 'ng/mL', 6, 'Stock concentration pending.')
-  on conflict (recipe_id, name) do update set calculation_mode = excluded.calculation_mode, target_value = excluded.target_value, target_unit = excluded.target_unit, stock_value = excluded.stock_value, stock_unit = excluded.stock_unit, sort_order = excluded.sort_order, notes = excluded.notes;
+    ('Medium 2 + FGF2 — NPC Expansion', 'B27', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 1, null),
+    ('Medium 2 + FGF2 — NPC Expansion', 'GlutaMAX', 'dilution', null::numeric, null, 1::numeric, 'X', 2, 'Stock concentration pending.'),
+    ('Medium 2 + FGF2 — NPC Expansion', 'MEM-NEAA', 'dilution', null::numeric, null, 1::numeric, 'X', 3, 'Stock concentration pending.'),
+    ('Medium 2 + FGF2 — NPC Expansion', 'Penicillin–Streptomycin', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 4, null),
+    ('Medium 2 + FGF2 — NPC Expansion', 'FGF2', 'dilution', null::numeric, null, 20::numeric, 'ng/mL', 5, 'Stock concentration pending.'),
 
-  insert into public.culture_media_recipes (name, version, solvent_name, description, is_active)
-  values ('Medium 3 — Maturation and Gliogenesis', '1.0', 'Neurobasal medium', 'Maturation, gliogenesis, and promotion of neural activity.', true)
-  on conflict do nothing;
-  select id into v_recipe_id from public.culture_media_recipes where lower(name) = lower('Medium 3 — Maturation and Gliogenesis') and lower(version) = '1.0';
-  insert into public.culture_media_components (recipe_id, name, calculation_mode, stock_value, stock_unit, target_value, target_unit, sort_order, notes)
-  values
-    (v_recipe_id, 'B27', 'percent_vv', null, null, 1, '% v/v', 1, null),
-    (v_recipe_id, 'GlutaMAX', 'dilution', null, null, 1, 'X', 2, 'Stock concentration pending.'),
-    (v_recipe_id, 'MEM-NEAA', 'dilution', null, null, 1, 'X', 3, 'Stock concentration pending.'),
-    (v_recipe_id, 'Penicillin–Streptomycin', 'dilution', 100, 'X', 1, 'X', 4, null),
-    (v_recipe_id, 'BDNF', 'dilution', null, null, 10, 'ng/mL', 5, 'Stock concentration pending.'),
-    (v_recipe_id, 'GDNF', 'dilution', null, null, 10, 'ng/mL', 6, 'Stock concentration pending.'),
-    (v_recipe_id, 'NT-3', 'dilution', null, null, 10, 'ng/mL', 7, 'Stock concentration pending.'),
-    (v_recipe_id, 'Ascorbic acid', 'dilution', null, null, 200, 'µM', 8, 'Stock concentration pending.'),
-    (v_recipe_id, 'Dibutyryl-cAMP', 'dilution', null, null, 1, 'mM', 9, 'Stock concentration pending.')
-  on conflict (recipe_id, name) do update set calculation_mode = excluded.calculation_mode, target_value = excluded.target_value, target_unit = excluded.target_unit, stock_value = excluded.stock_value, stock_unit = excluded.stock_unit, sort_order = excluded.sort_order, notes = excluded.notes;
+    ('Medium 2 + FGF2 + EGF — NPC Expansion', 'B27', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 1, null),
+    ('Medium 2 + FGF2 + EGF — NPC Expansion', 'GlutaMAX', 'dilution', null::numeric, null, 1::numeric, 'X', 2, 'Stock concentration pending.'),
+    ('Medium 2 + FGF2 + EGF — NPC Expansion', 'MEM-NEAA', 'dilution', null::numeric, null, 1::numeric, 'X', 3, 'Stock concentration pending.'),
+    ('Medium 2 + FGF2 + EGF — NPC Expansion', 'Penicillin–Streptomycin', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 4, null),
+    ('Medium 2 + FGF2 + EGF — NPC Expansion', 'FGF2', 'dilution', null::numeric, null, 20::numeric, 'ng/mL', 5, 'Stock concentration pending.'),
+    ('Medium 2 + FGF2 + EGF — NPC Expansion', 'EGF', 'dilution', null::numeric, null, 20::numeric, 'ng/mL', 6, 'Stock concentration pending.'),
 
-  insert into public.culture_media_recipes (name, version, solvent_name, description, is_active)
-  values ('Medium 2 — Organoid Maintenance', '1.0', 'Neurobasal medium', 'Cortical organoid maintenance medium.', true)
-  on conflict do nothing;
-  select id into v_recipe_id from public.culture_media_recipes where lower(name) = lower('Medium 2 — Organoid Maintenance') and lower(version) = '1.0';
-  insert into public.culture_media_components (recipe_id, name, calculation_mode, stock_value, stock_unit, target_value, target_unit, sort_order, notes)
-  values
-    (v_recipe_id, 'B27', 'percent_vv', null, null, 1, '% v/v', 1, null),
-    (v_recipe_id, 'GlutaMAX', 'dilution', null, null, 1, 'X', 2, 'Stock concentration pending.'),
-    (v_recipe_id, 'MEM-NEAA', 'dilution', null, null, 1, 'X', 3, 'Stock concentration pending.'),
-    (v_recipe_id, 'Penicillin–Streptomycin', 'dilution', 100, 'X', 1, 'X', 4, null)
-  on conflict (recipe_id, name) do update set calculation_mode = excluded.calculation_mode, target_value = excluded.target_value, target_unit = excluded.target_unit, stock_value = excluded.stock_value, stock_unit = excluded.stock_unit, sort_order = excluded.sort_order, notes = excluded.notes;
-end;
-$$;
+    ('Medium 3 — Maturation and Gliogenesis', 'B27', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 1, null),
+    ('Medium 3 — Maturation and Gliogenesis', 'GlutaMAX', 'dilution', null::numeric, null, 1::numeric, 'X', 2, 'Stock concentration pending.'),
+    ('Medium 3 — Maturation and Gliogenesis', 'MEM-NEAA', 'dilution', null::numeric, null, 1::numeric, 'X', 3, 'Stock concentration pending.'),
+    ('Medium 3 — Maturation and Gliogenesis', 'Penicillin–Streptomycin', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 4, null),
+    ('Medium 3 — Maturation and Gliogenesis', 'BDNF', 'dilution', null::numeric, null, 10::numeric, 'ng/mL', 5, 'Stock concentration pending.'),
+    ('Medium 3 — Maturation and Gliogenesis', 'GDNF', 'dilution', null::numeric, null, 10::numeric, 'ng/mL', 6, 'Stock concentration pending.'),
+    ('Medium 3 — Maturation and Gliogenesis', 'NT-3', 'dilution', null::numeric, null, 10::numeric, 'ng/mL', 7, 'Stock concentration pending.'),
+    ('Medium 3 — Maturation and Gliogenesis', 'Ascorbic acid', 'dilution', null::numeric, null, 200::numeric, 'µM', 8, 'Stock concentration pending.'),
+    ('Medium 3 — Maturation and Gliogenesis', 'Dibutyryl-cAMP', 'dilution', null::numeric, null, 1::numeric, 'mM', 9, 'Stock concentration pending.'),
+
+    ('Medium 2 — Organoid Maintenance', 'B27', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 1, null),
+    ('Medium 2 — Organoid Maintenance', 'GlutaMAX', 'dilution', null::numeric, null, 1::numeric, 'X', 2, 'Stock concentration pending.'),
+    ('Medium 2 — Organoid Maintenance', 'MEM-NEAA', 'dilution', null::numeric, null, 1::numeric, 'X', 3, 'Stock concentration pending.'),
+    ('Medium 2 — Organoid Maintenance', 'Penicillin–Streptomycin', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 4, null)
+)
+insert into public.culture_media_components (
+  recipe_id, name, calculation_mode, stock_value, stock_unit,
+  target_value, target_unit, sort_order, notes
+)
+select
+  recipe.id, component.component_name, component.calculation_mode,
+  component.stock_value, component.stock_unit, component.target_value,
+  component.target_unit, component.sort_order, component.notes
+from component_seed component
+join public.culture_media_recipes recipe
+  on lower(recipe.name) = lower(component.recipe_name)
+ and lower(recipe.version) = '1.0'
+on conflict (recipe_id, name) do update set
+  calculation_mode = excluded.calculation_mode,
+  stock_value = excluded.stock_value,
+  stock_unit = excluded.stock_unit,
+  target_value = excluded.target_value,
+  target_unit = excluded.target_unit,
+  sort_order = excluded.sort_order,
+  notes = excluded.notes;
 
 commit;
