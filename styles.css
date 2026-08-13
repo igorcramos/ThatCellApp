@@ -633,6 +633,30 @@ a:focus-visible,
   gap: 10px;
 }
 
+.protocol-task-group {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--project-color, var(--accent));
+  border-radius: 9px;
+  background: var(--surface-muted);
+}
+
+.protocol-task-group + .protocol-task-group { margin-top: 8px; }
+
+.protocol-task-group-header h4 {
+  margin: 0 0 5px;
+  font-size: 1rem;
+}
+
+.protocol-task-group-items {
+  display: grid;
+  gap: 8px;
+}
+
+.protocol-task-group-items .item { background: var(--surface); }
+
 .item {
   display: grid;
   grid-template-columns: 1fr auto;

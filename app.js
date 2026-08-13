@@ -1658,13 +1658,24 @@ function renderProtocolTasks() {
     return;
   }
 
-  els.protocolTasksList.innerHTML = tasks
-    .map((task) => {
-      const protocol = state.differentiationProtocols.find((item) => item.id === task.protocol_id);
+  const groupedTasks = new Map();
+  tasks.forEach((task) => {
+    const protocol = state.differentiationProtocols.find((item) => item.id === task.protocol_id);
+    const key = protocol?.id || `missing-${task.protocol_id || "unknown"}`;
+    if (!groupedTasks.has(key)) groupedTasks.set(key, { protocol, tasks: [] });
+    groupedTasks.get(key).tasks.push(task);
+  });
+
+  els.protocolTasksList.innerHTML = [...groupedTasks.values()]
+    .sort((a, b) => String(a.protocol?.name || "Unknown protocol").localeCompare(String(b.protocol?.name || "Unknown protocol")))
+    .map(({ protocol, tasks: protocolTasks }) => {
+      const orderedTasks = protocolTasks.sort((a, b) => Number(a.task_day ?? 0) - Number(b.task_day ?? 0) || String(a.title || "").localeCompare(String(b.title || "")));
+      const protocolMeta = [protocol?.project, protocol?.version ? `Version ${protocol.version}` : null, `${orderedTasks.length} task${orderedTasks.length === 1 ? "" : "s"}`].filter(Boolean);
+      return `<section class="protocol-task-group" style="--project-color:${escapeHtml(projectColor(protocol?.project))}">
+        <header class="protocol-task-group-header"><h4>${escapeHtml(protocol?.name || "Unknown protocol")}</h4><div class="item-meta">${protocolMeta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div></header>
+        <div class="protocol-task-group-items">${orderedTasks.map((task) => {
       const canManage = canManageLibraryRecord(protocol);
       const meta = [
-        protocol?.project,
-        protocol?.name,
         task.task_day !== null ? `D${task.task_day}` : null,
         task.task_type,
         task.estimated_duration_hours !== null ? `${task.estimated_duration_hours} h` : null,
@@ -1685,6 +1696,8 @@ function renderProtocolTasks() {
           </div>
         </article>
       `;
+        }).join("")}</div>
+      </section>`;
     })
     .join("");
 }
