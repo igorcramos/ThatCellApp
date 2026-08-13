@@ -137,7 +137,13 @@ function calculateCultureMediaComponent(component, targetVolume, targetVolumeUni
     const targetValue = cultureMediaNumber(component.target_value);
     const stockDefinition = cultureMediaConcentrationUnits[component.stock_unit];
     const targetDefinition = cultureMediaConcentrationUnits[component.target_unit];
-    if (!(stockValue > 0) || !(targetValue >= 0) || !stockDefinition || !targetDefinition) {
+    if (!(targetValue >= 0) || !targetDefinition) {
+      return cultureMediaError("Provide a valid final concentration.");
+    }
+    if (!(stockValue > 0)) {
+      return cultureMediaError("Stock concentration pending; add it before calculating the preparation volume.");
+    }
+    if (!stockDefinition) {
       return cultureMediaError("Provide valid stock and final concentrations.");
     }
     if (stockDefinition.family !== targetDefinition.family) {
@@ -598,6 +604,12 @@ function cultureMediaComponentPayload(data) {
 
 function validateCultureMediaComponent(payload) {
   if (!payload.name) return "Component name is required.";
+  if (payload.calculation_mode === "dilution" && payload.stock_value === null) {
+    const targetDefinition = cultureMediaConcentrationUnits[payload.target_unit];
+    return payload.target_value !== null && payload.target_value >= 0 && targetDefinition
+      ? null
+      : "Provide a valid final concentration.";
+  }
   const preview = calculateCultureMediaComponent(payload, 100, "mL");
   return preview.error;
 }
