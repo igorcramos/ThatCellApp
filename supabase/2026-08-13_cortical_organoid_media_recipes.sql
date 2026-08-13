@@ -21,39 +21,37 @@ with component_seed (
   target_value, target_unit, sort_order, notes
 ) as (
   values
-    ('2X Pre-Neural Induction Medium', 'Penicillin–Streptomycin', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 1, null),
-    ('2X Pre-Neural Induction Medium', 'SB431542', 'dilution', null::numeric, null, 20::numeric, 'µM', 2, 'Stock concentration pending.'),
-    ('2X Pre-Neural Induction Medium', 'Dorsomorphin', 'dilution', null::numeric, null, 2::numeric, 'µM', 3, 'Stock concentration pending.'),
+    ('2X Pre-Neural Induction Medium', 'SB431542', 'dilution', null::numeric, null, 20::numeric, 'µM', 1, 'Stock concentration pending.'),
+    ('2X Pre-Neural Induction Medium', 'Dorsomorphin', 'dilution', null::numeric, null, 2::numeric, 'µM', 2, 'Stock concentration pending.'),
 
-    ('Pre-Neural Induction Medium', 'Penicillin–Streptomycin', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 1, null),
-    ('Pre-Neural Induction Medium', 'SB431542', 'dilution', null::numeric, null, 10::numeric, 'µM', 2, 'Stock concentration pending.'),
-    ('Pre-Neural Induction Medium', 'Dorsomorphin', 'dilution', null::numeric, null, 1::numeric, 'µM', 3, 'Stock concentration pending.'),
+    ('Pre-Neural Induction Medium', 'SB431542', 'dilution', null::numeric, null, 10::numeric, 'µM', 1, 'Stock concentration pending.'),
+    ('Pre-Neural Induction Medium', 'Dorsomorphin', 'dilution', null::numeric, null, 1::numeric, 'µM', 2, 'Stock concentration pending.'),
 
     ('Medium 1 — Neural Induction', 'GlutaMAX', 'dilution', null::numeric, null, 1::numeric, 'X', 1, 'Stock concentration pending.'),
     ('Medium 1 — Neural Induction', 'B27', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 2, null),
     ('Medium 1 — Neural Induction', 'N2', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 3, null),
     ('Medium 1 — Neural Induction', 'MEM-NEAA', 'dilution', null::numeric, null, 1::numeric, 'X', 4, 'Stock concentration pending.'),
-    ('Medium 1 — Neural Induction', 'Penicillin–Streptomycin', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 5, null),
+    ('Medium 1 — Neural Induction', 'PenStrep', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 5, null),
     ('Medium 1 — Neural Induction', 'SB431542', 'dilution', null::numeric, null, 10::numeric, 'µM', 6, 'Stock concentration pending.'),
     ('Medium 1 — Neural Induction', 'Dorsomorphin', 'dilution', null::numeric, null, 1::numeric, 'µM', 7, 'Stock concentration pending.'),
 
     ('Medium 2 + FGF2 — NPC Expansion', 'B27', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 1, null),
     ('Medium 2 + FGF2 — NPC Expansion', 'GlutaMAX', 'dilution', null::numeric, null, 1::numeric, 'X', 2, 'Stock concentration pending.'),
     ('Medium 2 + FGF2 — NPC Expansion', 'MEM-NEAA', 'dilution', null::numeric, null, 1::numeric, 'X', 3, 'Stock concentration pending.'),
-    ('Medium 2 + FGF2 — NPC Expansion', 'Penicillin–Streptomycin', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 4, null),
+    ('Medium 2 + FGF2 — NPC Expansion', 'PenStrep', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 4, null),
     ('Medium 2 + FGF2 — NPC Expansion', 'FGF2', 'dilution', null::numeric, null, 20::numeric, 'ng/mL', 5, 'Stock concentration pending.'),
 
     ('Medium 2 + FGF2 + EGF — NPC Expansion', 'B27', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 1, null),
     ('Medium 2 + FGF2 + EGF — NPC Expansion', 'GlutaMAX', 'dilution', null::numeric, null, 1::numeric, 'X', 2, 'Stock concentration pending.'),
     ('Medium 2 + FGF2 + EGF — NPC Expansion', 'MEM-NEAA', 'dilution', null::numeric, null, 1::numeric, 'X', 3, 'Stock concentration pending.'),
-    ('Medium 2 + FGF2 + EGF — NPC Expansion', 'Penicillin–Streptomycin', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 4, null),
+    ('Medium 2 + FGF2 + EGF — NPC Expansion', 'PenStrep', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 4, null),
     ('Medium 2 + FGF2 + EGF — NPC Expansion', 'FGF2', 'dilution', null::numeric, null, 20::numeric, 'ng/mL', 5, 'Stock concentration pending.'),
     ('Medium 2 + FGF2 + EGF — NPC Expansion', 'EGF', 'dilution', null::numeric, null, 20::numeric, 'ng/mL', 6, 'Stock concentration pending.'),
 
     ('Medium 3 — Maturation and Gliogenesis', 'B27', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 1, null),
     ('Medium 3 — Maturation and Gliogenesis', 'GlutaMAX', 'dilution', null::numeric, null, 1::numeric, 'X', 2, 'Stock concentration pending.'),
     ('Medium 3 — Maturation and Gliogenesis', 'MEM-NEAA', 'dilution', null::numeric, null, 1::numeric, 'X', 3, 'Stock concentration pending.'),
-    ('Medium 3 — Maturation and Gliogenesis', 'Penicillin–Streptomycin', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 4, null),
+    ('Medium 3 — Maturation and Gliogenesis', 'PenStrep', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 4, null),
     ('Medium 3 — Maturation and Gliogenesis', 'BDNF', 'dilution', null::numeric, null, 10::numeric, 'ng/mL', 5, 'Stock concentration pending.'),
     ('Medium 3 — Maturation and Gliogenesis', 'GDNF', 'dilution', null::numeric, null, 10::numeric, 'ng/mL', 6, 'Stock concentration pending.'),
     ('Medium 3 — Maturation and Gliogenesis', 'NT-3', 'dilution', null::numeric, null, 10::numeric, 'ng/mL', 7, 'Stock concentration pending.'),
@@ -63,7 +61,7 @@ with component_seed (
     ('Medium 2 — Organoid Maintenance', 'B27', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 1, null),
     ('Medium 2 — Organoid Maintenance', 'GlutaMAX', 'dilution', null::numeric, null, 1::numeric, 'X', 2, 'Stock concentration pending.'),
     ('Medium 2 — Organoid Maintenance', 'MEM-NEAA', 'dilution', null::numeric, null, 1::numeric, 'X', 3, 'Stock concentration pending.'),
-    ('Medium 2 — Organoid Maintenance', 'Penicillin–Streptomycin', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 4, null)
+    ('Medium 2 — Organoid Maintenance', 'PenStrep', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 4, null)
 )
 insert into public.culture_media_components (
   recipe_id, name, calculation_mode, stock_value, stock_unit,

@@ -18,6 +18,7 @@ const cultureMediaEls = {
   newComponent: document.querySelector("#newMediaComponent"),
   componentList: document.querySelector("#mediaComponentList"),
   componentForm: document.querySelector("#mediaComponentForm"),
+  saveComponent: document.querySelector("#saveMediaComponent"),
   cancelComponent: document.querySelector("#cancelMediaComponentEdit"),
   calculationMode: document.querySelector("#mediaCalculationMode"),
   rateLabel: document.querySelector("#mediaRateLabel"),
@@ -548,7 +549,7 @@ function openCultureMediaComponentForm(component = null) {
   form.elements.notes.value = component?.notes || "";
   form.elements.is_active.checked = component?.is_active ?? true;
   const componentCount = selectedCultureMediaComponents(true).length;
-  const primarySubmit = form.querySelector("[data-component-next='another']");
+  const primarySubmit = cultureMediaEls.saveComponent;
   const finishSubmit = form.querySelector("[data-component-next='finish']");
   document.querySelector("#mediaComponentFormTitle").textContent = cultureMediaTranslate(component ? "Edit recipe component" : "Add recipe component");
   document.querySelector("#mediaComponentProgress").textContent = cultureMediaTranslate(component
@@ -565,6 +566,9 @@ function openCultureMediaComponentForm(component = null) {
 function closeCultureMediaComponentForm() {
   cultureMediaEls.componentForm.classList.add("is-hidden");
   cultureMediaEls.componentForm.reset();
+  cultureMediaEls.saveComponent.dataset.componentNext = "another";
+  cultureMediaEls.saveComponent.textContent = cultureMediaTranslate("Save & add another");
+  cultureMediaEls.componentForm.querySelector("[data-component-next='finish']")?.classList.remove("is-hidden");
 }
 
 function cultureMediaComponentPayload(data) {
