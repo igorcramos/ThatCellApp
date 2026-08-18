@@ -21,6 +21,7 @@
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: clip;
   background: var(--bg);
   color: var(--text);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -1626,23 +1627,87 @@ button[aria-busy="true"]::after {
 }
 
 @media (max-width: 760px) {
-  .tabs {
+  body {
+    overflow-wrap: anywhere;
+  }
+
+  main {
+    padding: 16px 12px 32px;
+  }
+
+  .app-header {
     gap: 12px;
-    padding-block: 9px 11px;
-    scroll-snap-type: x proximity;
+    padding: 14px 12px 12px;
+  }
+
+  .app-logo {
+    width: 46px;
+    height: 46px;
+  }
+
+  h1 {
+    font-size: clamp(1.65rem, 9vw, 2.15rem);
+  }
+
+  h2 {
+    font-size: 1.18rem;
+  }
+
+  .app-tagline {
+    margin-top: 4px;
+    font-size: 0.72rem;
+  }
+
+  .status-stack {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    justify-items: start;
+  }
+
+  .status-pill {
+    min-width: 0;
+    padding: 7px 10px;
+    font-size: 0.78rem;
+  }
+
+  .last-updated {
+    white-space: normal;
+  }
+
+  .user-strip {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .tabs {
+    flex-wrap: wrap;
+    gap: 10px 8px;
+    padding: 9px 12px 11px;
+    overflow-x: clip;
   }
 
   .nav-group {
-    scroll-snap-align: start;
+    flex: 1 1 150px;
+    min-width: 0;
   }
 
   .nav-group + .nav-group {
-    padding-left: 12px;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .nav-group-tabs {
+    flex-wrap: wrap;
+    gap: 5px;
   }
 
   .tab {
-    min-height: 44px;
-    padding-inline: 12px;
+    flex: 1 1 auto;
+    min-height: 40px;
+    padding-inline: 9px;
+    white-space: normal;
   }
 
   input,
@@ -1659,6 +1724,30 @@ button[aria-busy="true"]::after {
   .panel-title-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .section-heading {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .form-grid,
+  .table-panel {
+    min-width: 0;
+    margin-bottom: 16px;
+    padding: 12px;
+  }
+
+  .form-grid {
+    gap: 11px;
+  }
+
+  .form-section,
+  .conditional-grid,
+  .checkbox-grid,
+  .protocol-task-group {
+    min-width: 0;
+    padding: 10px;
   }
 
   .summary-grid {
@@ -1707,23 +1796,19 @@ button[aria-busy="true"]::after {
     height: auto;
   }
 
-  .primary-button {
-    width: 100%;
-  }
-
   .protocol-import-bar { align-items: stretch; flex-direction: column; }
   .schedule-row { grid-template-columns: 1fr; gap: 6px; }
   .batch-color-controls { grid-template-columns: 1fr; }
   .batch-custom-color { justify-content: start; }
 
-  .form-actions,
-  .form-actions .primary-button,
-  .form-actions .secondary-button {
-    width: 100%;
+  .form-actions {
+    align-items: stretch;
   }
 
   .form-actions .primary-button,
   .form-actions .secondary-button {
+    flex: 1 1 150px;
+    width: auto;
     height: auto;
     padding-block: 9px;
     line-height: 1.25;
@@ -1748,6 +1833,62 @@ button[aria-busy="true"]::after {
 
   .item {
     grid-template-columns: 1fr;
+    min-height: 0;
+    padding: 11px;
+  }
+
+  .item > *,
+  .schedule-task > *,
+  .calendar-export-heading > * {
+    min-width: 0;
+  }
+
+  .item-actions,
+  .export-actions,
+  .filter-row {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .item-actions .secondary-button {
+    flex: 0 1 auto;
+  }
+
+  .schedule-task {
+    grid-template-columns: 1fr;
+    padding: 11px 12px;
+  }
+
+  .schedule-task-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .schedule-task-heading {
+    flex-wrap: wrap;
+  }
+
+  .calendar-export-dialog {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+  }
+
+  .calendar-export-dialog form {
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .calendar-export-heading {
+    gap: 10px;
+  }
+
+  .calendar-run-checkboxes {
+    grid-template-columns: 1fr;
+  }
+
+  .plate-map-panel,
+  .cryo-map-panel {
+    padding: 10px;
+    border-radius: 12px;
   }
 
   .plate-map {
@@ -1765,5 +1906,38 @@ button[aria-busy="true"]::after {
 
   .cryo-slot {
     min-width: 52px;
+  }
+}
+
+@media (max-width: 420px) {
+  .summary-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+  }
+
+  .metric {
+    min-height: 68px;
+    padding: 10px;
+  }
+
+  .metric strong {
+    font-size: 1.45rem;
+  }
+
+  .status-stack {
+    grid-template-columns: 1fr;
+  }
+
+  .language-control,
+  .language-control select {
+    width: 100%;
+  }
+
+  .calendar-export-heading {
+    flex-direction: column;
+  }
+
+  .calendar-export-heading .icon-button {
+    align-self: flex-end;
   }
 }

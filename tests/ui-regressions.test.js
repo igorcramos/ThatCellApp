@@ -61,6 +61,13 @@ const mediaCss = read("culture-media.css");
 assert.match(mediaCss, /\.media-workspace\s*\{[^}]*min-width:\s*0;/s);
 assert.match(mediaCss, /\.media-results-wrap\s*\{[^}]*max-width:\s*100%;[^}]*overflow-x:\s*auto;/s);
 
+const appCss = read("styles.css");
+assert.match(appCss, /body\s*\{[^}]*overflow-x:\s*clip;/s, "the app shell must not overflow the viewport");
+assert.match(appCss, /@media \(max-width: 760px\)[\s\S]*?\.tabs\s*\{[^}]*flex-wrap:\s*wrap;[^}]*overflow-x:\s*clip;/s,
+  "mobile navigation must wrap instead of requiring horizontal scrolling");
+assert.match(appCss, /@media \(max-width: 760px\)[\s\S]*?\.schedule-task\s*\{[^}]*grid-template-columns:\s*1fr;/s,
+  "schedule cards must use one column on narrow screens");
+
 const reagentOperations = read("reagent-operations.js");
 assert.match(reagentOperations, /scannerRequestId:\s*0/);
 assert.match(reagentOperations, /requestId !== reagentOpsState\.scannerRequestId/);
@@ -70,5 +77,16 @@ const reagentChecklists = read("reagent-checklists.js");
 assert.match(reagentChecklists, /data-check-quantity type="number" inputmode="decimal"/);
 assert.match(reagentChecklists, /reagentChecklistTranslate\("Order item"\)/);
 assert.match(reagentChecklists, /<details class="reagent-weekly-notes"/);
+
+const index = read("index.html");
+const app = read("app.js");
+assert.match(index, /name="schedule_action" type="radio" value="planned"/,
+  "off-schedule completion must offer the original scheduled date");
+assert.match(index, /I forgot to mark it/,
+  "retroactive completion choice must explain its purpose");
+assert.match(app, /scheduleAction === "planned"[\s\S]*actualDate: pending\.plannedDate/,
+  "retroactive completion must persist the activity on the planned date");
+assert.match(app, /elements\.reason\.required = !isRetroactive/,
+  "retroactive completion must not require a deviation reason");
 
 console.log("UI regressions: translations, responsive layout, and scanner cancellation passed");

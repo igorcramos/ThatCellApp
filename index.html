@@ -8,7 +8,7 @@
     <link rel="shortcut icon" type="image/png" href="assets/logo-cell-pin.png?v=20260813a">
     <link rel="apple-touch-icon" href="assets/logo-cell-pin.png?v=20260813a">
     <meta name="theme-color" content="#176f64">
-    <link rel="stylesheet" href="styles.css?v=20260813c">
+    <link rel="stylesheet" href="styles.css?v=20260818a">
     <link rel="stylesheet" href="reagent-operations.css?v=20260812a">
     <link rel="stylesheet" href="culture-media.css?v=20260812b">
   </head>
@@ -408,8 +408,8 @@
             Notes
             <textarea name="notes" rows="3" placeholder="Initial notes"></textarea>
           </label>
-          <div class="wide admin-only is-hidden">
-            <div class="field-label">Culture members</div>
+          <div class="wide">
+            <div class="field-label">Responsible people</div>
             <div class="checkbox-grid" id="cultureMemberCheckboxes"></div>
           </div>
           <div class="form-actions wide">
@@ -1615,27 +1615,31 @@
           <button class="icon-button" data-close-late-dialog type="button" aria-label="Close">&times;</button>
         </div>
         <fieldset class="late-task-options">
-          <legend>How should this affect the run?</legend>
+          <legend>When was the task performed?</legend>
+          <label class="late-task-option">
+            <input name="schedule_action" type="radio" value="planned">
+            <span><strong>On the scheduled date — I forgot to mark it</strong><small>Record the activity on its original date without creating a deviation or moving the schedule.</small></span>
+          </label>
           <label class="late-task-option">
             <input name="schedule_action" type="radio" value="keep" checked>
-            <span><strong>Record deviation — keep schedule</strong><small>Flag the late/early completion for the report without moving downstream tasks.</small></span>
+            <span><strong>Today — keep schedule</strong><small>Flag the late/early completion for the report without moving downstream tasks.</small></span>
           </label>
           <label class="late-task-option">
             <input name="schedule_action" type="radio" value="shift">
-            <span><strong>Record deviation — shift downstream schedule</strong><small>Move all later protocol tasks by the detected number of days.</small></span>
+            <span><strong>Today — shift downstream schedule</strong><small>Move all later protocol tasks by the detected number of days.</small></span>
           </label>
         </fieldset>
-        <label>
+        <label data-late-task-deviation-field>
           Reason for deviation
           <input name="reason" required placeholder="Example: Morphology was not ready for the next phase">
         </label>
-        <label>
+        <label data-late-task-deviation-field>
           Report notes
           <textarea name="notes" rows="3" placeholder="Observation, decision, or expected impact"></textarea>
         </label>
         <div class="form-actions calendar-export-actions">
           <button class="secondary-button" data-close-late-dialog type="button">Cancel</button>
-          <button class="primary-button" type="submit">Complete task &amp; record deviation</button>
+          <button class="primary-button" type="submit">Complete task</button>
         </div>
       </form>
     </dialog>
@@ -1671,12 +1675,12 @@
 
     <script src="supabase-js.min.js?v=20260714a"></script>
     <script src="supabase-local.js?v=20260714a"></script>
-    <script src="i18n.js?v=20260812c"></script>
+    <script src="i18n.js?v=20260818a"></script>
     <script src="zxing-browser.min.js?v=0.2.0"></script>
     <script src="barcode-scanner.js?v=20260810a"></script>
     <script src="schedule-calendar.js?v=20260809a"></script>
     <script src="shared-library.js?v=20260812b"></script>
-    <script src="app.js?v=20260813c"></script>
+    <script src="app.js?v=20260818a"></script>
     <script src="reagent-inventory.js?v=20260805b"></script>
     <script src="reagent-checklists.js?v=20260812a"></script>
     <script src="reagent-operations.js?v=20260812a"></script>

@@ -45,6 +45,9 @@ Simple web app for cell culture tracking using Supabase.
     new users and the admin-only member management screen.
 16. Run `supabase/2026-08-13_member_multi_labs_admin.sql` to allow members in
     more than one lab and activate the configured admin for both default labs.
+17. Run `supabase/2026-08-18_shared_culture_responsibility.sql` so culture
+    creators and assigned collaborators can maintain a shared list of responsible
+    people while always retaining the culture creator.
 
 ## Login options
 

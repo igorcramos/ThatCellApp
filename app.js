@@ -457,11 +457,12 @@ function requireAuthLabSelection() {
 
 function memberCheckboxesHtml(selectedIds = []) {
   const selected = new Set(selectedIds.filter(Boolean));
-  if (!state.profiles.length) {
+  const availableProfiles = state.profiles.filter((profile) => profile.is_active !== false);
+  if (!availableProfiles.length) {
     return '<div class="empty-state">No users available yet.</div>';
   }
 
-  return state.profiles
+  return availableProfiles
     .map((profile) => `
       <label class="checkbox-label">
         <input type="checkbox" value="${profile.id}" ${selected.has(profile.id) ? "checked" : ""}>
@@ -3106,6 +3107,15 @@ async function syncMembership(table, keyColumn, ownerId, userIds) {
   return error || null;
 }
 
+async function syncCultureResponsibilities(cultureId, userIds) {
+  if (!cultureId) return null;
+  const { error } = await db.rpc("set_culture_members", {
+    culture_id_arg: cultureId,
+    user_ids_arg: uniqueValues(userIds || []),
+  });
+  return error || null;
+}
+
 async function handleProjectSubmit(event) {
   event.preventDefault();
   if (!ensureDb()) return;
@@ -3332,15 +3342,13 @@ async function handleCultureSubmit(event) {
     return;
   }
 
-  const membershipError = await syncMembership(
-    "culture_members",
-    "culture_id",
+  const membershipError = await syncCultureResponsibilities(
     savedCulture?.id || editingId,
     getCheckedValues(els.cultureMemberCheckboxes)
   );
   if (membershipError) {
     submit.disabled = false;
-    showToast(`Culture saved, but members failed: ${membershipError.message}`);
+    showToast(`Culture saved, but responsible people could not be updated: ${membershipError.message}`);
     return;
   }
 
@@ -3966,6 +3974,8 @@ async function toggleScheduledTask(button) {
       : `${Math.abs(dayDifference)} day${Math.abs(dayDifference) === 1 ? "" : "s"} early`;
     els.lateTaskSummary.textContent = `${item.title} was planned for ${formatDate(plannedDate)} and is being completed on ${formatDate(actualDate)} (${timing}).`;
     els.lateTaskForm.reset();
+    els.lateTaskForm.querySelectorAll("[data-late-task-deviation-field]").forEach((field) => field.classList.remove("is-hidden"));
+    els.lateTaskForm.elements.reason.required = true;
     els.lateTaskDialog.showModal();
     return;
   }
@@ -4069,8 +4079,14 @@ async function handleLateTaskSubmit(event) {
   const data = new FormData(event.currentTarget);
   const scheduleAction = data.get("schedule_action") || "keep";
   const reason = valueOrNull(data.get("reason"));
-  if (!reason) return showToast("Enter the reason for the protocol deviation.");
   const pending = pendingOffScheduleCompletion;
+  if (scheduleAction === "planned") {
+    els.lateTaskDialog.close();
+    pendingOffScheduleCompletion = null;
+    await completeScheduledTask(pending.run, pending.item, { actualDate: pending.plannedDate });
+    return;
+  }
+  if (!reason) return showToast("Enter the reason for the protocol deviation.");
   const deviation = {
     dayShift: scheduleAction === "shift" ? pending.dayDifference : 0,
     reason,
@@ -4628,6 +4644,14 @@ function setupForms() {
   bindBusyForm(els.collectionForm, handleCollectionSubmit);
   bindBusyForm(els.runDeviationForm, handleRunDeviationSubmit);
   bindBusyForm(els.lateTaskForm, handleLateTaskSubmit);
+  els.lateTaskForm.addEventListener("change", (event) => {
+    if (event.target.name !== "schedule_action") return;
+    const isRetroactive = event.target.value === "planned";
+    els.lateTaskForm.querySelectorAll("[data-late-task-deviation-field]").forEach((field) => {
+      field.classList.toggle("is-hidden", isRetroactive);
+    });
+    els.lateTaskForm.elements.reason.required = !isRetroactive;
+  });
   bindBusyForm(els.deferTaskForm, handleDeferTaskSubmit);
   bindBusyForm(els.eventForm, handleEventSubmit);
   els.historyProjectFilter.addEventListener("change", renderEvents);
