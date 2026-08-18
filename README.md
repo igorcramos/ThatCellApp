@@ -48,6 +48,9 @@ Simple web app for cell culture tracking using Supabase.
 17. Run `supabase/2026-08-18_shared_culture_responsibility.sql` so culture
     creators and assigned collaborators can maintain a shared list of responsible
     people while always retaining the culture creator.
+18. Run `supabase/2026-08-18_finish_culture.sql` to allow responsible people to
+    discard a culture, record its outcome, and stop future work from directly
+    linked active differentiation batches in one transaction.
 
 ## Login options
 

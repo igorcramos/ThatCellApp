@@ -1671,16 +1671,37 @@
         </div>
       </form>
     </dialog>
+    <dialog class="calendar-export-dialog culture-end-dialog" id="endCultureDialog" aria-labelledby="endCultureTitle">
+      <form id="endCultureForm">
+        <input name="culture_id" type="hidden">
+        <div class="calendar-export-heading">
+          <div>
+            <p class="eyebrow">Culture closure</p>
+            <h2 id="endCultureTitle">Finish culture</h2>
+            <p id="endCultureSummary"></p>
+          </div>
+          <button class="icon-button" data-close-end-culture-dialog type="button" aria-label="Close">&times;</button>
+        </div>
+        <label>Outcome<select name="outcome" required><option value="Cell death">Cells died</option><option value="Contamination">Contamination</option><option value="Experiment completed">Experiment completed</option><option value="No longer needed">No longer needed</option><option value="Other">Other</option></select></label>
+        <label>Discard date<input name="ended_on" type="date" required></label>
+        <label>Notes<textarea name="notes" rows="3" placeholder="What happened to the culture?"></textarea></label>
+        <div class="culture-end-warning">This records the discard in Activity and stops future tasks from active batches started directly from this culture.</div>
+        <div class="form-actions calendar-export-actions">
+          <button class="secondary-button" data-close-end-culture-dialog type="button">Cancel</button>
+          <button class="danger-button destructive-action-button" type="submit">Discard &amp; finish culture</button>
+        </div>
+      </form>
+    </dialog>
     <section id="printSchedule" class="print-schedule" aria-hidden="true"></section>
 
     <script src="supabase-js.min.js?v=20260714a"></script>
     <script src="supabase-local.js?v=20260714a"></script>
-    <script src="i18n.js?v=20260818a"></script>
+    <script src="i18n.js?v=20260818b"></script>
     <script src="zxing-browser.min.js?v=0.2.0"></script>
     <script src="barcode-scanner.js?v=20260810a"></script>
     <script src="schedule-calendar.js?v=20260809a"></script>
     <script src="shared-library.js?v=20260812b"></script>
-    <script src="app.js?v=20260818a"></script>
+    <script src="app.js?v=20260818b"></script>
     <script src="reagent-inventory.js?v=20260805b"></script>
     <script src="reagent-checklists.js?v=20260812a"></script>
     <script src="reagent-operations.js?v=20260812a"></script>

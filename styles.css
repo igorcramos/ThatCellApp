@@ -1496,6 +1496,9 @@ a:focus-visible,
 .late-task-option input { width: auto; margin: 3px 0 0; }
 .late-task-option span { display: grid; gap: 3px; }
 .late-task-option small { color: var(--muted); line-height: 1.35; }
+.culture-end-button { border-color: #b6453d; color: #8c2f28; }
+.culture-end-warning { padding: 11px 12px; border-left: 4px solid #b6453d; border-radius: 7px; background: #fff7f6; color: #6f2924; font-size: 0.84rem; line-height: 1.4; }
+.destructive-action-button { min-height: 40px; padding: 9px 14px; border: 1px solid #9d3932; border-radius: 8px; background: #b6453d; color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
 .print-schedule {
   display: none;
   color: #17201b;

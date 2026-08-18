@@ -150,6 +150,9 @@ const els = {
   deferTaskDialog: document.querySelector("#deferTaskDialog"),
   deferTaskForm: document.querySelector("#deferTaskForm"),
   deferTaskSummary: document.querySelector("#deferTaskSummary"),
+  endCultureDialog: document.querySelector("#endCultureDialog"),
+  endCultureForm: document.querySelector("#endCultureForm"),
+  endCultureSummary: document.querySelector("#endCultureSummary"),
   eventsList: document.querySelector("#eventsList"),
   cultureCellLineCheckboxes: document.querySelector("#cultureCellLineCheckboxes"),
   vesselCultureSelect: document.querySelector("#vesselCultureSelect"),
@@ -2135,6 +2138,7 @@ function renderCultureItem(culture) {
       </div>
       <div class="item-actions">
         <span class="badge ${badgeClass}">${escapeHtml(label)}</span>
+        ${culture.status === "active" ? `<button class="secondary-button compact-button culture-end-button" data-end-culture="${culture.id}" type="button">Finish culture</button>` : ""}
         <button class="icon-button edit-button" data-edit-culture="${culture.id}" type="button" title="Edit culture" aria-label="Edit culture">&#9998;</button>
         <button class="icon-button danger-button" data-delete-culture="${culture.id}" type="button" title="Delete culture" aria-label="Delete culture">&#128465;</button>
       </div>
@@ -4653,6 +4657,7 @@ function setupForms() {
     els.lateTaskForm.elements.reason.required = !isRetroactive;
   });
   bindBusyForm(els.deferTaskForm, handleDeferTaskSubmit);
+  bindBusyForm(els.endCultureForm, handleEndCultureSubmit);
   bindBusyForm(els.eventForm, handleEventSubmit);
   els.historyProjectFilter.addEventListener("change", renderEvents);
   els.historyCultureFilter.addEventListener("change", renderEvents);
@@ -4703,6 +4708,7 @@ function setupForms() {
     els.deferTaskDialog.close();
   }));
   els.deferTaskDialog.addEventListener("cancel", () => { pendingTaskDeferral = null; });
+  els.endCultureDialog.querySelectorAll("[data-close-end-culture-dialog]").forEach((button) => button.addEventListener("click", () => els.endCultureDialog.close()));
   els.printRunSchedule.addEventListener("click", () => printSchedules(true));
   [els.todayDifferentiationTasks, els.runSchedule].forEach((container) => container.addEventListener("click", (event) => {
     const button = event.target.closest("[data-toggle-schedule-task]");
@@ -4969,6 +4975,18 @@ function handleCryoSearchResultsClick(event) {
 }
 
 function handleCulturesListClick(event) {
+  const endButton = event.target.closest("[data-end-culture]");
+  if (endButton) {
+    const culture = state.cultures.find((item) => item.id === endButton.dataset.endCulture);
+    if (!culture) return;
+    els.endCultureForm.reset();
+    setFieldValue(els.endCultureForm, "culture_id", culture.id);
+    setFieldValue(els.endCultureForm, "ended_on", todayValue());
+    els.endCultureSummary.textContent = `Finish ${cultureDisplayName(culture)} and stop its future activity.`;
+    els.endCultureDialog.showModal();
+    return;
+  }
+
   const deleteButton = event.target.closest("[data-delete-culture]");
   if (deleteButton) {
     deleteRecord("cultures", deleteButton.dataset.deleteCulture, "culture");
@@ -4983,6 +5001,30 @@ function handleCulturesListClick(event) {
 
   setActiveView("culturesView");
   fillCultureForm(culture);
+}
+
+async function handleEndCultureSubmit(event) {
+  event.preventDefault();
+  if (!ensureDb()) return;
+  const data = new FormData(event.currentTarget);
+  const cultureId = valueOrNull(data.get("culture_id"));
+  const culture = state.cultures.find((item) => item.id === cultureId);
+  if (!culture || culture.status !== "active") {
+    els.endCultureDialog.close();
+    return showToast("This culture is no longer active.");
+  }
+
+  const { error } = await db.rpc("finish_culture", {
+    culture_id_arg: cultureId,
+    ended_on_arg: valueOrNull(data.get("ended_on")) || todayValue(),
+    outcome_arg: valueOrNull(data.get("outcome")) || "Other",
+    notes_arg: valueOrNull(data.get("notes")),
+  });
+  if (error) return showToast(`Culture could not be finished: ${error.message}`);
+
+  els.endCultureDialog.close();
+  showToast("Culture discarded, recorded in Activity, and future linked tasks stopped.");
+  await loadData();
 }
 
 function handlePlateMapClick(event) {

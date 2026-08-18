@@ -88,5 +88,9 @@ assert.match(app, /scheduleAction === "planned"[\s\S]*actualDate: pending\.plann
   "retroactive completion must persist the activity on the planned date");
 assert.match(app, /elements\.reason\.required = !isRetroactive/,
   "retroactive completion must not require a deviation reason");
+assert.match(index, /id="endCultureDialog"[\s\S]*Discard &amp; finish culture/,
+  "active cultures must have an explicit discard workflow");
+assert.match(app, /db\.rpc\("finish_culture"[\s\S]*await loadData\(\)/,
+  "finishing a culture must use the transactional database operation and reload state");
 
 console.log("UI regressions: translations, responsive layout, and scanner cancellation passed");
