@@ -4215,6 +4215,15 @@ async function handleDifferentiationRunSubmit(event) {
   };
 
   const editingId = valueOrNull(data.get("id"));
+  if (!editingId) {
+    const userId = currentUserId();
+    if (!userId) {
+      submit.disabled = false;
+      showToast("Your session expired. Sign in again before starting a differentiation.");
+      return;
+    }
+    payload.created_by = userId;
+  }
   const query = editingId
     ? db.from("differentiation_runs").update(payload).eq("id", editingId).select("id").single()
     : db.from("differentiation_runs").insert(payload).select("id").single();

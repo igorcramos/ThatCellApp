@@ -56,12 +56,15 @@ assert.doesNotMatch(runInsertPolicy, /is_project_name_member\(project\)/, "share
 assert.match(sharedProtocolRunsMigration, /created_by = auth\.uid\(\)[\s\S]+is_project_name_member\(project\)/, "run owners and project members may update accessible runs");
 
 const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
+const app = fs.readFileSync(path.join(root, "app.js"), "utf8");
 assert(index.indexOf("shared-library.js") < index.indexOf("app.js?v="), "shared library helpers must load before the app");
 assert.match(index, /id="cellLineLibrarySearch"/);
 assert.match(index, /id="protocolLibrarySearch"/);
 assert.match(index, /name="is_shared" type="checkbox"/);
 assert.match(index, /Make this cell line available to the laboratory/);
 assert.match(index, /Make this protocol available to the laboratory/);
+assert.match(app, /payload\.created_by = userId;/, "new differentiation runs must send their creator explicitly");
+assert.match(app, /Your session expired\. Sign in again before starting a differentiation\./);
 
 const translations = fs.readFileSync(path.join(root, "i18n.js"), "utf8");
 assert.match(translations, /"Cell line library": "Biblioteca de linhagens celulares"/);
