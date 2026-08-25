@@ -34,6 +34,7 @@ assert.equal(library.nextAdaptationName("Microglia", protocols), "Microglia (ada
 const root = path.resolve(__dirname, "..");
 const migration = fs.readFileSync(path.join(root, "supabase/2026-08-12_shared_protocol_cell_line_library.sql"), "utf8");
 const visibilityMigration = fs.readFileSync(path.join(root, "supabase/2026-08-12_visibility_controls.sql"), "utf8");
+const sharedProtocolRunsMigration = fs.readFileSync(path.join(root, "supabase/2026-08-25_shared_protocol_runs.sql"), "utf8");
 assert.match(migration, /protocols shared library read/);
 assert.match(migration, /can_manage_protocol/);
 assert.match(migration, /clone_shared_protocol/);
@@ -48,6 +49,11 @@ assert.match(visibilityMigration, /protocol\.is_shared/);
 assert.match(visibilityMigration, /uq_cell_lines_owner_private_identity/);
 assert.match(visibilityMigration, /uq_protocols_lab_shared_name_version/);
 assert.match(visibilityMigration, /source\.notes,\s+false,\s+auth\.uid\(\)/);
+const runInsertPolicy = sharedProtocolRunsMigration.match(/create policy "runs member insert"[\s\S]+?\n\);/)?.[0] || "";
+assert.match(runInsertPolicy, /created_by = auth\.uid\(\)/);
+assert.match(runInsertPolicy, /can_access_protocol\(protocol_id\)/);
+assert.doesNotMatch(runInsertPolicy, /is_project_name_member\(project\)/, "shared protocols must be usable without joining their project");
+assert.match(sharedProtocolRunsMigration, /created_by = auth\.uid\(\)[\s\S]+is_project_name_member\(project\)/, "run owners and project members may update accessible runs");
 
 const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
 assert(index.indexOf("shared-library.js") < index.indexOf("app.js?v="), "shared library helpers must load before the app");
