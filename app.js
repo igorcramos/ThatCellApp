@@ -192,7 +192,7 @@ const els = {
   differentiationVesselSelect: document.querySelector("#differentiationVesselSelect"),
   differentiationWellsPanel: document.querySelector("#differentiationWellsPanel"),
   differentiationWellCheckboxes: document.querySelector("#differentiationWellCheckboxes"),
-  differentiationCellLineCheckboxes: document.querySelector("#differentiationCellLineCheckboxes"),
+  differentiationCellLineSummary: document.querySelector("#differentiationCellLineSummary"),
   differentiationEventDate: document.querySelector("#differentiationEventDate"),
   activityTargetTypeSelect: document.querySelector("#activityTargetTypeSelect"),
   eventCulturesPanel: document.querySelector("#eventCulturesPanel"),
@@ -694,10 +694,13 @@ function cellLinesForCulture(cultureId) {
 
 function cellLineIdsForRun(runId) {
   const run = state.differentiationRuns.find((item) => item.id === runId);
-  return uniqueValues([
-    ...state.differentiationRunCellLines.filter((link) => link.differentiation_run_id === runId).map((link) => link.cell_line_id),
-    ...(run?.source_culture_id ? cellLineIdsForCulture(run.source_culture_id) : []),
-  ]);
+  const snapshotIds = uniqueValues(
+    state.differentiationRunCellLines
+      .filter((link) => link.differentiation_run_id === runId)
+      .map((link) => link.cell_line_id)
+  );
+  if (snapshotIds.length > 0) return snapshotIds;
+  return run?.source_culture_id ? cellLineIdsForCulture(run.source_culture_id) : [];
 }
 
 function cellLineDisplayName(line) {
@@ -1317,7 +1320,6 @@ function renderOptions() {
     ? state.cellLines.map((line) => `<label class="checkbox-label"><input type="checkbox" value="${line.id}">${escapeHtml(cellLineDisplayName(line))}</label>`).join("")
     : '<div class="empty-state">Add a cell line first.</div>';
   els.cultureCellLineCheckboxes.innerHTML = lineCheckboxes;
-  els.differentiationCellLineCheckboxes.innerHTML = lineCheckboxes;
   els.wellCellLineSelect.innerHTML = [
     '<option value="">Not specified</option>',
     lineOptions,
@@ -1445,6 +1447,7 @@ function renderOptions() {
   if (state.differentiationRuns.some((run) => run.id === selectedCollectionRun)) els.collectionRunSelect.value = selectedCollectionRun;
 
   renderDifferentiationWellCheckboxes();
+  renderDifferentiationLineageSummary();
   syncCultureNameSuggestion();
 }
 
@@ -2112,6 +2115,75 @@ function renderDifferentiationWellCheckboxes() {
       `;
     })
     .join("");
+}
+
+function lineageIdsForMappedWell(well) {
+  if (!well) return [];
+  if (well.cell_line_id) return [well.cell_line_id];
+  return well.culture_id ? cellLineIdsForCulture(well.culture_id) : [];
+}
+
+function differentiationSourceLineageResolution() {
+  const form = els.differentiationRunForm;
+  const editingId = valueOrNull(form?.elements.id?.value);
+  if (editingId) {
+    const snapshotIds = uniqueValues(
+      state.differentiationRunCellLines
+        .filter((link) => link.differentiation_run_id === editingId)
+        .map((link) => link.cell_line_id)
+    );
+    if (snapshotIds.length > 0) return { ids: snapshotIds, isSnapshot: true };
+  }
+
+  const sourceType = els.differentiationSourceType.value || "culture";
+  if (sourceType === "culture") {
+    const cultureId = els.differentiationCultureSelect.value;
+    const ids = cellLineIdsForCulture(cultureId);
+    return {
+      ids,
+      error: cultureId && ids.length === 0 ? "No cell line is mapped to this culture." : null,
+    };
+  }
+
+  const vesselId = els.differentiationVesselSelect.value;
+  const mappedWells = state.vesselWells.filter((well) => well.vessel_id === vesselId);
+  if (sourceType === "wells") {
+    const selectedWells = getCheckedValues(els.differentiationWellCheckboxes);
+    const selectedMaps = selectedWells.map((wellName) => mappedWells.find((well) => well.well === wellName));
+    const unresolved = selectedWells.filter((wellName, index) => lineageIdsForMappedWell(selectedMaps[index]).length === 0);
+    return {
+      ids: uniqueValues(selectedMaps.flatMap(lineageIdsForMappedWell)),
+      error: unresolved.length ? `Map the selected source well(s) before starting: ${unresolved.join(", ")}` : null,
+    };
+  }
+
+  const ids = mappedWells.length > 0
+    ? uniqueValues(mappedWells.flatMap(lineageIdsForMappedWell))
+    : uniqueValues(cultureIdsForVessel(vesselId).flatMap(cellLineIdsForCulture));
+  return {
+    ids,
+    error: vesselId && ids.length === 0 ? "No cell line is mapped to this plate." : null,
+  };
+}
+
+function renderDifferentiationLineageSummary() {
+  if (!els.differentiationCellLineSummary) return;
+  const resolution = differentiationSourceLineageResolution();
+  const names = resolution.ids
+    .map((id) => state.cellLines.find((line) => line.id === id))
+    .filter(Boolean)
+    .map(cellLineDisplayName);
+
+  if (resolution.error) {
+    els.differentiationCellLineSummary.innerHTML = `<span class="lineage-summary-warning">${escapeHtml(resolution.error)}</span>`;
+    return;
+  }
+  if (names.length === 0) {
+    els.differentiationCellLineSummary.innerHTML = '<span>Choose a source to inherit its cell lines.</span>';
+    return;
+  }
+  const prefix = resolution.isSnapshot ? "Saved lineage snapshot" : "Inherited automatically";
+  els.differentiationCellLineSummary.innerHTML = `<strong>${escapeHtml(names.join(" + "))}</strong><small>${escapeHtml(prefix)}</small>`;
 }
 
 function renderCultureItem(culture) {
@@ -4188,10 +4260,9 @@ async function handleDifferentiationRunSubmit(event) {
   const selectedWells = sourceType === "wells"
     ? getCheckedValues(els.differentiationWellCheckboxes)
     : [];
-  const cellLineIds = getCheckedValues(els.differentiationCellLineCheckboxes);
-
-  if (cellLineIds.length === 0) {
-    showToast("Select at least one cell line for this differentiation batch.");
+  const lineageResolution = differentiationSourceLineageResolution();
+  if (lineageResolution.error) {
+    showToast(lineageResolution.error);
     return;
   }
 
@@ -4201,75 +4272,25 @@ async function handleDifferentiationRunSubmit(event) {
   }
 
   submit.disabled = true;
-  const payload = {
-    protocol_id: valueOrNull(data.get("protocol_id")),
-    run_name: valueOrNull(data.get("run_name")),
-    project: valueFromSelectWithCustom(data, "project", "custom_project"),
-    day_zero_date: valueOrNull(data.get("day_zero_date")),
-    source_type: sourceType,
-    source_culture_id: sourceType === "culture" ? valueOrNull(data.get("source_culture_id")) : null,
-    source_vessel_id: sourceVesselId,
-    status: valueOrNull(data.get("status")) || "active",
-    schedule_color: normalizedBatchColor(data.get("schedule_color")),
-    notes: valueOrNull(data.get("notes")),
-  };
-
   const editingId = valueOrNull(data.get("id"));
-  if (!editingId) {
-    const userId = currentUserId();
-    if (!userId) {
-      submit.disabled = false;
-      showToast("Your session expired. Sign in again before starting a differentiation.");
-      return;
-    }
-    payload.created_by = userId;
-  }
-  const query = editingId
-    ? db.from("differentiation_runs").update(payload).eq("id", editingId).select("id").single()
-    : db.from("differentiation_runs").insert(payload).select("id").single();
-  const { data: saved, error } = await query;
+  const { error } = await db.rpc("save_differentiation_run", {
+    run_id_arg: editingId,
+    protocol_id_arg: valueOrNull(data.get("protocol_id")),
+    run_name_arg: valueOrNull(data.get("run_name")),
+    project_arg: valueFromSelectWithCustom(data, "project", "custom_project"),
+    day_zero_date_arg: valueOrNull(data.get("day_zero_date")),
+    source_type_arg: sourceType,
+    source_culture_id_arg: sourceType === "culture" ? valueOrNull(data.get("source_culture_id")) : null,
+    source_vessel_id_arg: sourceVesselId,
+    status_arg: valueOrNull(data.get("status")) || "active",
+    schedule_color_arg: normalizedBatchColor(data.get("schedule_color")),
+    notes_arg: valueOrNull(data.get("notes")),
+    source_wells_arg: selectedWells,
+  });
 
   if (error) {
     submit.disabled = false;
-    showToast(`Error starting differentiation: ${error.message}`);
-    return;
-  }
-
-  const { error: deleteWellsError } = await db
-    .from("differentiation_run_wells")
-    .delete()
-    .eq("differentiation_run_id", saved.id);
-
-  if (deleteWellsError) {
-    submit.disabled = false;
-    showToast(`Run saved, but old wells could not be cleared: ${deleteWellsError.message}`);
-    return;
-  }
-
-  if (sourceType === "wells") {
-    const runWells = selectedWells.map((well) => ({
-      differentiation_run_id: saved.id,
-      vessel_id: sourceVesselId,
-      well,
-    }));
-    const { error: wellsError } = await db.from("differentiation_run_wells").insert(runWells);
-    if (wellsError) {
-      submit.disabled = false;
-      showToast(`Run started, but wells failed: ${wellsError.message}`);
-      return;
-    }
-  }
-
-  const { error: deleteLinesError } = await db.from("differentiation_run_cell_lines").delete().eq("differentiation_run_id", saved.id);
-  if (deleteLinesError) {
-    submit.disabled = false;
-    showToast(`Run saved, but old cell lines could not be cleared: ${deleteLinesError.message}`);
-    return;
-  }
-  const { error: lineLinksError } = await db.from("differentiation_run_cell_lines").insert(cellLineIds.map((cellLineId) => ({ differentiation_run_id: saved.id, cell_line_id: cellLineId })));
-  if (lineLinksError) {
-    submit.disabled = false;
-    showToast(`Run saved, but cell lines failed: ${lineLinksError.message}`);
+    showToast(`Error saving differentiation: ${error.message}`);
     return;
   }
 
@@ -4785,12 +4806,9 @@ function setupForms() {
   els.protocolProjectSelect.addEventListener("change", syncConditionalFields);
   els.runProjectSelect.addEventListener("change", syncConditionalFields);
   els.differentiationSourceType.addEventListener("change", syncDifferentiationSourceFields);
-  els.differentiationCultureSelect.addEventListener("change", () => {
-    if (els.differentiationSourceType.value === "culture") {
-      setCheckedValues(els.differentiationCellLineCheckboxes, cellLineIdsForCulture(els.differentiationCultureSelect.value));
-    }
-  });
-  els.differentiationVesselSelect.addEventListener("change", renderDifferentiationWellCheckboxes);
+  els.differentiationCultureSelect.addEventListener("change", renderDifferentiationLineageSummary);
+  els.differentiationVesselSelect.addEventListener("change", syncDifferentiationSourceFields);
+  els.differentiationWellCheckboxes.addEventListener("change", renderDifferentiationLineageSummary);
   els.activityTargetTypeSelect.addEventListener("change", syncActivityTargetFields);
   els.performedBySelect.addEventListener("change", syncConditionalFields);
   els.eventTypeSelect.addEventListener("change", syncActivityEventFields);
@@ -4798,6 +4816,7 @@ function setupForms() {
 
 function syncDifferentiationSourceFields() {
   renderDifferentiationWellCheckboxes();
+  renderDifferentiationLineageSummary();
 }
 
 function syncActivityTargetFields() {
@@ -5286,13 +5305,13 @@ function fillDifferentiationRunForm(run) {
   setFieldValue(form, "status", run.status || "active");
   syncDifferentiationBatchColor(runScheduleColor(run));
   setFieldValue(form, "notes", run.notes);
-  setCheckedValues(els.differentiationCellLineCheckboxes, cellLineIdsForRun(run.id));
   renderDifferentiationWellCheckboxes();
 
   const runWells = state.differentiationRunWells
     .filter((well) => well.differentiation_run_id === run.id)
     .map((well) => well.well);
   setCheckedValues(els.differentiationWellCheckboxes, runWells);
+  renderDifferentiationLineageSummary();
 
   els.differentiationRunSubmitButton.textContent = "Update differentiation";
   els.cancelDifferentiationRunEdit.classList.remove("is-hidden");
@@ -5306,7 +5325,6 @@ function resetDifferentiationRunForm() {
   setDefaultDate(els.differentiationRunForm, "day_zero_date");
   syncDifferentiationBatchColor(nextDifferentiationBatchColor());
   setCheckedValues(els.differentiationWellCheckboxes, []);
-  setCheckedValues(els.differentiationCellLineCheckboxes, []);
   els.differentiationRunSubmitButton.textContent = "Start differentiation";
   els.cancelDifferentiationRunEdit.classList.add("is-hidden");
   syncDifferentiationSourceFields();

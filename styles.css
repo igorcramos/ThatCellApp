@@ -442,6 +442,28 @@ label {
   font-weight: 700;
 }
 
+.lineage-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  min-height: 44px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.lineage-summary small {
+  color: var(--muted);
+}
+
+.lineage-summary-warning {
+  color: var(--danger);
+  font-weight: 700;
+}
+
 .wide {
   grid-column: 1 / -1;
 }
