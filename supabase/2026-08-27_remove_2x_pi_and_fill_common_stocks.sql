@@ -15,8 +15,8 @@ set calculation_mode = 'dilution',
     target_value = 1,
     target_unit = 'X',
     notes = case
-      when lower(coalesce(notes, '')) = lower('Stock concentration pending.') then null
-      else notes
+      when lower(coalesce(component.notes, '')) = lower('Stock concentration pending.') then null
+      else component.notes
     end
 from public.culture_media_recipes recipe
 where component.recipe_id = recipe.id
