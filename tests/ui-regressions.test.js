@@ -77,6 +77,17 @@ const reagentChecklists = read("reagent-checklists.js");
 assert.match(reagentChecklists, /data-check-quantity type="number" inputmode="decimal"/);
 assert.match(reagentChecklists, /reagentChecklistTranslate\("Order item"\)/);
 assert.match(reagentChecklists, /<details class="reagent-weekly-notes"/);
+assert.match(reagentChecklists, /class="reagent-weekly-controls"/);
+assert.match(reagentCss, /@media \(max-width: 760px\)[\s\S]*?\.reagent-weekly-section\s*\{\s*order:\s*-1;/s,
+  "the weekly check must appear before list administration on mobile");
+assert.match(reagentCss, /@media \(max-width: 760px\)[\s\S]*?\.reagent-weekly-row\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/s,
+  "weekly rows must collapse to accessible cards on mobile");
+assert.match(reagentCss, /@media \(max-width: 420px\)[\s\S]*?\.reagent-weekly-controls\s*\{[^}]*grid-template-columns:\s*1fr;/s,
+  "weekly inputs must use one column on narrow phones");
+assert.match(reagentCss, /@media \(max-width: 760px\)[\s\S]*?\.reagent-checklist-summary\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s,
+  "the mobile checklist summary must stay compact enough to expose the form");
+assert.doesNotMatch(reagentCss, /#reagentWeeklyCheckForm > \.form-actions\s*\{[^}]*position:\s*sticky;/s,
+  "the save action must not cover mobile checklist fields");
 
 const index = read("index.html");
 const app = read("app.js");

@@ -178,8 +178,10 @@ function renderReagentWeeklyCheckRows() {
     const unit = reagentChecklistTranslate(item.unit);
     return `<div class="reagent-weekly-row" data-check-item="${escapeHtml(item.id)}">
       <div class="reagent-weekly-item"><strong>${escapeHtml(item.display_name)}</strong><span>${escapeHtml(item.expected_location || reagentChecklistTranslate("No location"))} · ${escapeHtml(`${reagentChecklistTranslate("Minimum")} ${item.minimum_quantity} ${unit}`)}</span></div>
-      <label class="reagent-weekly-count">${escapeHtml(reagentChecklistTranslate("Count"))}<input data-check-quantity type="number" inputmode="decimal" min="0" step="any" value="${escapeHtml(quantity)}"></label>
-      <label class="checkbox-label reagent-weekly-order"><input data-check-ordered type="checkbox" ${ordered ? "checked" : ""}> ${escapeHtml(reagentChecklistTranslate("Order item"))}</label>
+      <div class="reagent-weekly-controls">
+        <label class="reagent-weekly-count">${escapeHtml(reagentChecklistTranslate("Count"))}<input data-check-quantity type="number" inputmode="decimal" min="0" step="any" value="${escapeHtml(quantity)}"></label>
+        <label class="checkbox-label reagent-weekly-order"><input data-check-ordered type="checkbox" ${ordered ? "checked" : ""}> ${escapeHtml(reagentChecklistTranslate("Order item"))}</label>
+      </div>
       <details class="reagent-weekly-notes" ${notes ? "open" : ""}>
         <summary>${escapeHtml(reagentChecklistTranslate("Notes"))}${notes ? " ·" : ""}</summary>
         <input data-check-notes aria-label="${escapeHtml(reagentChecklistTranslate("Notes"))}" placeholder="${escapeHtml(reagentChecklistTranslate("Optional"))}" value="${escapeHtml(notes)}">
