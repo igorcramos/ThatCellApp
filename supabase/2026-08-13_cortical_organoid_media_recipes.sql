@@ -7,7 +7,6 @@ begin;
 insert into public.culture_media_recipes
   (name, version, solvent_name, description, notes, is_active)
 values
-  ('2X Pre-Neural Induction Medium', '1.0', 'mTeSR1', 'Two-fold pre-neural induction formulation.', 'After adding the 2X medium, the final culture concentrations must be 10 µM SB431542 and 1 µM Dorsomorphin.', true),
   ('Pre-Neural Induction Medium', '1.0', 'mTeSR1', 'Pre-neural induction formulation.', null, true),
   ('Medium 1 — Neural Induction', '1.0', 'Neurobasal medium', 'Neural induction medium.', null, true),
   ('Medium 2 + FGF2 — NPC Expansion', '1.0', 'Neurobasal medium', 'Neural progenitor cell expansion medium.', null, true),
@@ -21,36 +20,33 @@ with component_seed (
   target_value, target_unit, sort_order, notes
 ) as (
   values
-    ('2X Pre-Neural Induction Medium', 'SB431542', 'dilution', null::numeric, null, 20::numeric, 'µM', 1, 'Stock concentration pending.'),
-    ('2X Pre-Neural Induction Medium', 'Dorsomorphin', 'dilution', null::numeric, null, 2::numeric, 'µM', 2, 'Stock concentration pending.'),
-
     ('Pre-Neural Induction Medium', 'SB431542', 'dilution', null::numeric, null, 10::numeric, 'µM', 1, 'Stock concentration pending.'),
     ('Pre-Neural Induction Medium', 'Dorsomorphin', 'dilution', null::numeric, null, 1::numeric, 'µM', 2, 'Stock concentration pending.'),
 
-    ('Medium 1 — Neural Induction', 'GlutaMAX', 'dilution', null::numeric, null, 1::numeric, 'X', 1, 'Stock concentration pending.'),
-    ('Medium 1 — Neural Induction', 'B27', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 2, null),
-    ('Medium 1 — Neural Induction', 'N2', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 3, null),
-    ('Medium 1 — Neural Induction', 'MEM-NEAA', 'dilution', null::numeric, null, 1::numeric, 'X', 4, 'Stock concentration pending.'),
+    ('Medium 1 — Neural Induction', 'GlutaMAX', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 1, null),
+    ('Medium 1 — Neural Induction', 'B27', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 2, null),
+    ('Medium 1 — Neural Induction', 'N2', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 3, null),
+    ('Medium 1 — Neural Induction', 'MEM-NEAA', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 4, null),
     ('Medium 1 — Neural Induction', 'PenStrep', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 5, null),
     ('Medium 1 — Neural Induction', 'SB431542', 'dilution', null::numeric, null, 10::numeric, 'µM', 6, 'Stock concentration pending.'),
     ('Medium 1 — Neural Induction', 'Dorsomorphin', 'dilution', null::numeric, null, 1::numeric, 'µM', 7, 'Stock concentration pending.'),
 
-    ('Medium 2 + FGF2 — NPC Expansion', 'B27', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 1, null),
-    ('Medium 2 + FGF2 — NPC Expansion', 'GlutaMAX', 'dilution', null::numeric, null, 1::numeric, 'X', 2, 'Stock concentration pending.'),
-    ('Medium 2 + FGF2 — NPC Expansion', 'MEM-NEAA', 'dilution', null::numeric, null, 1::numeric, 'X', 3, 'Stock concentration pending.'),
+    ('Medium 2 + FGF2 — NPC Expansion', 'B27', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 1, null),
+    ('Medium 2 + FGF2 — NPC Expansion', 'GlutaMAX', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 2, null),
+    ('Medium 2 + FGF2 — NPC Expansion', 'MEM-NEAA', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 3, null),
     ('Medium 2 + FGF2 — NPC Expansion', 'PenStrep', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 4, null),
     ('Medium 2 + FGF2 — NPC Expansion', 'FGF2', 'dilution', null::numeric, null, 20::numeric, 'ng/mL', 5, 'Stock concentration pending.'),
 
-    ('Medium 2 + FGF2 + EGF — NPC Expansion', 'B27', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 1, null),
-    ('Medium 2 + FGF2 + EGF — NPC Expansion', 'GlutaMAX', 'dilution', null::numeric, null, 1::numeric, 'X', 2, 'Stock concentration pending.'),
-    ('Medium 2 + FGF2 + EGF — NPC Expansion', 'MEM-NEAA', 'dilution', null::numeric, null, 1::numeric, 'X', 3, 'Stock concentration pending.'),
+    ('Medium 2 + FGF2 + EGF — NPC Expansion', 'B27', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 1, null),
+    ('Medium 2 + FGF2 + EGF — NPC Expansion', 'GlutaMAX', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 2, null),
+    ('Medium 2 + FGF2 + EGF — NPC Expansion', 'MEM-NEAA', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 3, null),
     ('Medium 2 + FGF2 + EGF — NPC Expansion', 'PenStrep', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 4, null),
     ('Medium 2 + FGF2 + EGF — NPC Expansion', 'FGF2', 'dilution', null::numeric, null, 20::numeric, 'ng/mL', 5, 'Stock concentration pending.'),
     ('Medium 2 + FGF2 + EGF — NPC Expansion', 'EGF', 'dilution', null::numeric, null, 20::numeric, 'ng/mL', 6, 'Stock concentration pending.'),
 
-    ('Medium 3 — Maturation and Gliogenesis', 'B27', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 1, null),
-    ('Medium 3 — Maturation and Gliogenesis', 'GlutaMAX', 'dilution', null::numeric, null, 1::numeric, 'X', 2, 'Stock concentration pending.'),
-    ('Medium 3 — Maturation and Gliogenesis', 'MEM-NEAA', 'dilution', null::numeric, null, 1::numeric, 'X', 3, 'Stock concentration pending.'),
+    ('Medium 3 — Maturation and Gliogenesis', 'B27', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 1, null),
+    ('Medium 3 — Maturation and Gliogenesis', 'GlutaMAX', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 2, null),
+    ('Medium 3 — Maturation and Gliogenesis', 'MEM-NEAA', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 3, null),
     ('Medium 3 — Maturation and Gliogenesis', 'PenStrep', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 4, null),
     ('Medium 3 — Maturation and Gliogenesis', 'BDNF', 'dilution', null::numeric, null, 10::numeric, 'ng/mL', 5, 'Stock concentration pending.'),
     ('Medium 3 — Maturation and Gliogenesis', 'GDNF', 'dilution', null::numeric, null, 10::numeric, 'ng/mL', 6, 'Stock concentration pending.'),
@@ -58,9 +54,9 @@ with component_seed (
     ('Medium 3 — Maturation and Gliogenesis', 'Ascorbic acid', 'dilution', null::numeric, null, 200::numeric, 'µM', 8, 'Stock concentration pending.'),
     ('Medium 3 — Maturation and Gliogenesis', 'Dibutyryl-cAMP', 'dilution', null::numeric, null, 1::numeric, 'mM', 9, 'Stock concentration pending.'),
 
-    ('Medium 2 — Organoid Maintenance', 'B27', 'percent_vv', null::numeric, null, 1::numeric, '% v/v', 1, null),
-    ('Medium 2 — Organoid Maintenance', 'GlutaMAX', 'dilution', null::numeric, null, 1::numeric, 'X', 2, 'Stock concentration pending.'),
-    ('Medium 2 — Organoid Maintenance', 'MEM-NEAA', 'dilution', null::numeric, null, 1::numeric, 'X', 3, 'Stock concentration pending.'),
+    ('Medium 2 — Organoid Maintenance', 'B27', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 1, null),
+    ('Medium 2 — Organoid Maintenance', 'GlutaMAX', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 2, null),
+    ('Medium 2 — Organoid Maintenance', 'MEM-NEAA', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 3, null),
     ('Medium 2 — Organoid Maintenance', 'PenStrep', 'dilution', 100::numeric, 'X', 1::numeric, 'X', 4, null)
 )
 insert into public.culture_media_components (
