@@ -1296,7 +1296,16 @@ function differentiationSourceLabel(run) {
 function differentiationRunLabel(run) {
   if (!run) return "Differentiation run";
   const protocol = state.differentiationProtocols.find((item) => item.id === run.protocol_id);
-  return [run.run_name, protocol?.name].filter(Boolean).join(" - ");
+  return [run.run_name, localizedProtocolValue(protocol, "name")].filter(Boolean).join(" - ");
+}
+
+function localizedProtocolValue(record, field) {
+  if (!record) return "";
+  return window.getAppLanguage?.() === "pt" ? record[`${field}_pt`] || record[field] || "" : record[field] || "";
+}
+
+function localizedProtocolTask(task) {
+  return task ? { ...task, title: localizedProtocolValue(task, "title"), medium: localizedProtocolValue(task, "medium"), notes: localizedProtocolValue(task, "notes") } : task;
 }
 
 function projectForDifferentiationRun(run) {
@@ -1424,11 +1433,11 @@ function renderOptions() {
 
   const usableProtocols = state.differentiationProtocols.filter(canUseLibraryRecord);
   const protocolOptions = usableProtocols
-    .map((protocol) => `<option value="${protocol.id}">${escapeHtml(protocol.name)}</option>`)
+    .map((protocol) => `<option value="${protocol.id}">${escapeHtml(localizedProtocolValue(protocol, "name"))}</option>`)
     .join("");
   const manageableProtocols = state.differentiationProtocols.filter(canManageLibraryRecord);
   const manageableProtocolOptions = manageableProtocols
-    .map((protocol) => `<option value="${protocol.id}">${escapeHtml(protocol.name)}</option>`)
+    .map((protocol) => `<option value="${protocol.id}">${escapeHtml(localizedProtocolValue(protocol, "name"))}</option>`)
     .join("");
   els.differentiationProtocolSelect.innerHTML = protocolOptions || '<option value="">Save a protocol first</option>';
   els.differentiationProtocolSelect.disabled = usableProtocols.length === 0;
@@ -1705,7 +1714,7 @@ function renderDifferentiationProtocols() {
       return `
         <article class="item project-card" style="--project-color: ${escapeHtml(projectColor(protocol?.project))}">
           <div>
-            <div class="item-title">${escapeHtml(protocol.name)}</div>
+            <div class="item-title">${escapeHtml(localizedProtocolValue(protocol, "name"))}</div>
             <div class="item-meta">
               ${meta.length ? meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("") : "<span>No additional details</span>"}
             </div>
@@ -1745,13 +1754,14 @@ function renderProtocolTasks() {
   });
 
   els.protocolTasksList.innerHTML = [...groupedTasks.values()]
-    .sort((a, b) => String(a.protocol?.name || "Unknown protocol").localeCompare(String(b.protocol?.name || "Unknown protocol")))
+    .sort((a, b) => localizedProtocolValue(a.protocol, "name").localeCompare(localizedProtocolValue(b.protocol, "name")))
     .map(({ protocol, tasks: protocolTasks }) => {
       const orderedTasks = protocolTasks.sort((a, b) => Number(a.task_day ?? 0) - Number(b.task_day ?? 0) || String(a.title || "").localeCompare(String(b.title || "")));
       const protocolMeta = [protocol?.project, protocol?.version ? `Version ${protocol.version}` : null, `${orderedTasks.length} task${orderedTasks.length === 1 ? "" : "s"}`].filter(Boolean);
       return `<section class="protocol-task-group" style="--project-color:${escapeHtml(projectColor(protocol?.project))}">
-        <header class="protocol-task-group-header"><h4>${escapeHtml(protocol?.name || "Unknown protocol")}</h4><div class="item-meta">${protocolMeta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div></header>
+        <header class="protocol-task-group-header"><h4>${escapeHtml(localizedProtocolValue(protocol, "name") || "Unknown protocol")}</h4><div class="item-meta">${protocolMeta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div></header>
         <div class="protocol-task-group-items">${orderedTasks.map((task) => {
+      const displayedTask = localizedProtocolTask(task);
       const canManage = canManageLibraryRecord(protocol);
       const meta = [
         task.task_day !== null ? `D${task.task_day}` : null,
@@ -1761,12 +1771,12 @@ function renderProtocolTasks() {
       return `
         <article class="item project-card" style="--project-color: ${escapeHtml(projectColor(protocol?.project))}">
           <div>
-            <div class="item-title">${escapeHtml(task.title)}</div>
+            <div class="item-title">${escapeHtml(displayedTask.title)}</div>
             <div class="item-meta">
               ${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
             </div>
-            ${task.notes ? `<p class="event-notes">${escapeHtml(task.notes)}</p>` : ""}
-            ${task.medium ? `<p class="task-medium"><strong>Medium:</strong> ${escapeHtml(task.medium)}</p>` : ""}
+            ${displayedTask.notes ? `<p class="event-notes">${escapeHtml(displayedTask.notes)}</p>` : ""}
+            ${displayedTask.medium ? `<p class="task-medium"><strong>Medium:</strong> ${escapeHtml(displayedTask.medium)}</p>` : ""}
           </div>
           <div class="item-actions">
             ${canManage ? `<button class="icon-button edit-button" data-edit-protocol-task="${task.id}" type="button" title="Edit task" aria-label="Edit task">&#9998;</button>
@@ -1875,7 +1885,7 @@ function renderDifferentiationRuns() {
       const currentDay = daysSince(run.day_zero_date);
       const meta = [
         projectForDifferentiationRun(run),
-        protocol?.name,
+        localizedProtocolValue(protocol, "name"),
         `Cell lines: ${cellLineIdsForRun(run.id).map((id) => state.cellLines.find((line) => line.id === id)).filter(Boolean).map(cellLineDisplayName).join(", ") || "Not specified"}`,
         differentiationSourceLabel(run),
         run.day_zero_date ? `Day 0: ${formatDate(run.day_zero_date)}` : null,
@@ -1896,7 +1906,7 @@ function renderDifferentiationRuns() {
               <div class="task-preview">
                 ${scheduledTasks.map((task) => `
                   <div>
-                    <strong>${escapeHtml(`D${adjustedRunDay(run.id, task.task_day)}: ${task.title}${adjustedRunDay(run.id, task.task_day) !== Number(task.task_day) ? ` (protocol D${task.task_day})` : ""}`)}</strong>
+                    <strong>${escapeHtml(`D${adjustedRunDay(run.id, task.task_day)}: ${localizedProtocolValue(task, "title")}${adjustedRunDay(run.id, task.task_day) !== Number(task.task_day) ? ` (protocol D${task.task_day})` : ""}`)}</strong>
                     <span>${escapeHtml(formatEstimatedCompletion(run.day_zero_date, adjustedRunDay(run.id, task.task_day), task.estimated_duration_hours) || "No estimate")}</span>
                   </div>
                 `).join("")}
@@ -1942,7 +1952,7 @@ function buildRunSchedule(run) {
     .map((task) => {
       const protocolDay = Number(task.task_day);
       const runDay = adjustedRunDay(run.id, protocolDay);
-      return { ...task, kind: "task", protocol_day: protocolDay, task_day: runDay, date: addDateValueDays(run.day_zero_date, runDay) };
+      return { ...localizedProtocolTask(task), kind: "task", protocol_day: protocolDay, task_day: runDay, date: addDateValueDays(run.day_zero_date, runDay) };
     });
   const isMediumTask = (task) => hasMeaningfulProtocolValue(task.medium)
     || ["Media change", "Factor addition", "Replating"].includes(task.task_type);
