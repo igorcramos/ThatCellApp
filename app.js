@@ -250,6 +250,7 @@ const els = {
   cancelProtocolEdit: document.querySelector("#cancelProtocolEdit"),
   protocolTaskSubmitButton: document.querySelector("#protocolTaskSubmitButton"),
   cancelProtocolTaskEdit: document.querySelector("#cancelProtocolTaskEdit"),
+  newProtocolTaskButton: document.querySelector("#newProtocolTaskButton"),
   differentiationRunSubmitButton: document.querySelector("#differentiationRunSubmitButton"),
   cancelDifferentiationRunEdit: document.querySelector("#cancelDifferentiationRunEdit"),
   eventSubmitButton: document.querySelector("#eventSubmitButton"),
@@ -1444,6 +1445,7 @@ function renderOptions() {
   els.taskProtocolSelect.innerHTML = manageableProtocolOptions || '<option value="">Create or clone a protocol to add tasks</option>';
   els.taskProtocolSelect.disabled = manageableProtocols.length === 0;
   els.protocolTaskSubmitButton.disabled = manageableProtocols.length === 0;
+  els.newProtocolTaskButton.disabled = manageableProtocols.length === 0;
 
   const runOptions = state.differentiationRuns
     .map((run) => `<option value="${run.id}">${escapeHtml(differentiationRunLabel(run))}</option>`)
@@ -4381,20 +4383,52 @@ function setupTabs() {
       setActiveView(tab.dataset.view);
     });
     tab.addEventListener("keydown", (event) => {
-      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
       event.preventDefault();
       const current = tabs.indexOf(tab);
       const next = event.key === "Home"
         ? 0
         : event.key === "End"
           ? tabs.length - 1
-          : (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+          : (current + (["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : -1) + tabs.length) % tabs.length;
       tabs[next].focus();
       setActiveView(tabs[next].dataset.view);
     });
   });
   const activeTab = tabs.find((tab) => tab.classList.contains("is-active")) || tabs[0];
   if (activeTab) setActiveView(activeTab.dataset.view);
+}
+
+function setupMobileMenu() {
+  const button = document.querySelector("#mobileMenuButton");
+  const closeButton = document.querySelector("#mobileMenuClose");
+  const backdrop = document.querySelector("#mobileMenuBackdrop");
+  const navigation = document.querySelector("#appNavigation");
+  if (!button || !closeButton || !backdrop || !navigation) return;
+
+  const setOpen = (isOpen) => {
+    document.body.classList.toggle("mobile-menu-open", isOpen);
+    navigation.classList.toggle("is-open", isOpen);
+    button.setAttribute("aria-expanded", String(isOpen));
+    backdrop.hidden = !isOpen;
+    navigation.setAttribute("aria-orientation", window.matchMedia("(max-width: 760px)").matches ? "vertical" : "horizontal");
+    if (isOpen) closeButton.focus();
+    else if (document.activeElement === closeButton) button.focus();
+  };
+
+  button.addEventListener("click", () => setOpen(!navigation.classList.contains("is-open")));
+  closeButton.addEventListener("click", () => setOpen(false));
+  backdrop.addEventListener("click", () => setOpen(false));
+  navigation.addEventListener("click", (event) => {
+    if (event.target.closest(".tab") && window.matchMedia("(max-width: 760px)").matches) setOpen(false);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && navigation.classList.contains("is-open")) setOpen(false);
+  });
+  window.addEventListener("resize", () => {
+    if (!window.matchMedia("(max-width: 760px)").matches) setOpen(false);
+    navigation.setAttribute("aria-orientation", window.matchMedia("(max-width: 760px)").matches ? "vertical" : "horizontal");
+  });
 }
 
 function setActiveView(viewId) {
@@ -4418,10 +4452,48 @@ function setActiveView(viewId) {
     const tabs = activeTab.closest(".tabs");
     const tabBounds = activeTab.getBoundingClientRect();
     const tabsBounds = tabs?.getBoundingClientRect();
-    if (tabsBounds && (tabBounds.left < tabsBounds.left || tabBounds.right > tabsBounds.right)) {
+    if (tabsBounds && !window.matchMedia("(max-width: 760px)").matches && (tabBounds.left < tabsBounds.left || tabBounds.right > tabsBounds.right)) {
       activeTab.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
     }
   }
+}
+
+function setCollapsibleEditorOpen(form, isOpen) {
+  if (!form) return;
+  form.classList.toggle("is-hidden", !isOpen);
+  const formId = form.getAttribute("id");
+  if (!formId) return;
+  document.querySelectorAll(`[data-open-editor="${formId}"]`).forEach((button) => {
+    button.setAttribute("aria-expanded", String(isOpen));
+  });
+}
+
+function resetterForCollapsibleEditor(formId) {
+  return ({
+    projectForm: resetProjectForm,
+    cellLineForm: resetCellLineForm,
+    cultureForm: resetCultureForm,
+    cryoBoxForm: resetCryoBoxForm,
+    protocolForm: resetProtocolForm,
+    protocolTaskForm: resetProtocolTaskForm,
+    differentiationRunForm: resetDifferentiationRunForm,
+    eventForm: resetEventForm,
+  })[formId];
+}
+
+function openCollapsibleEditor(formId) {
+  const form = document.getElementById(formId);
+  if (!form) return;
+  resetterForCollapsibleEditor(formId)?.({ keepOpen: true });
+  setCollapsibleEditorOpen(form, true);
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  form.querySelector('input:not([type="hidden"]), select, textarea')?.focus({ preventScroll: true });
+}
+
+function setupCollapsibleEditors() {
+  document.querySelectorAll("[data-open-editor]").forEach((button) => {
+    button.addEventListener("click", () => openCollapsibleEditor(button.dataset.openEditor));
+  });
 }
 
 function bindBusyForm(form, handler) {
@@ -4662,6 +4734,7 @@ async function initAuth() {
 
 function setupForms() {
   setupProgressiveDisclosure();
+  setupCollapsibleEditors();
   els.membersList?.addEventListener("click", handleMembersListClick);
   els.membersList?.addEventListener("change", handleMembersListChange);
   els.memberSearchInput?.addEventListener("input", renderMembers);
@@ -5209,17 +5282,20 @@ function fillProjectForm(projectName) {
   setCheckedValues(els.projectMemberCheckboxes, projectMemberIds(project?.id));
   els.projectSubmitButton.textContent = "Update project";
   els.cancelProjectEdit.classList.remove("is-hidden");
+  setCollapsibleEditorOpen(form, true);
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function resetProjectForm() {
+function resetProjectForm(options = {}) {
+  const keepOpen = options?.keepOpen === true;
   els.projectForm.reset();
   els.projectForm.elements.id.value = "";
   els.projectForm.elements.original_name.value = "";
   els.projectForm.elements.color.value = "#176f64";
   renderMemberSelectors();
   els.projectSubmitButton.textContent = "Save project";
-  els.cancelProjectEdit.classList.add("is-hidden");
+  els.cancelProjectEdit.classList.toggle("is-hidden", !keepOpen);
+  setCollapsibleEditorOpen(els.projectForm, keepOpen);
 }
 
 function fillCellLineForm(line) {
@@ -5247,15 +5323,18 @@ function fillCellLineForm(line) {
   els.cellLineSubmitButton.textContent = "Update cell line";
   els.cancelCellLineEdit.classList.remove("is-hidden");
   syncConditionalFields();
+  setCollapsibleEditorOpen(form, true);
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function resetCellLineForm() {
+function resetCellLineForm(options = {}) {
+  const keepOpen = options?.keepOpen === true;
   els.cellLineForm.reset();
   els.cellLineForm.elements.id.value = "";
   els.cellLineSubmitButton.textContent = "Save cell line";
-  els.cancelCellLineEdit.classList.add("is-hidden");
+  els.cancelCellLineEdit.classList.toggle("is-hidden", !keepOpen);
   syncConditionalFields();
+  setCollapsibleEditorOpen(els.cellLineForm, keepOpen);
 }
 
 function fillProtocolForm(protocol) {
@@ -5270,14 +5349,19 @@ function fillProtocolForm(protocol) {
   setFieldValue(form, "is_shared", isSharedLibraryRecord(protocol));
   els.protocolSubmitButton.textContent = "Update protocol";
   els.cancelProtocolEdit.classList.remove("is-hidden");
+  syncConditionalFields();
+  setCollapsibleEditorOpen(form, true);
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function resetProtocolForm() {
+function resetProtocolForm(options = {}) {
+  const keepOpen = options?.keepOpen === true;
   els.protocolForm.reset();
   els.protocolForm.elements.id.value = "";
   els.protocolSubmitButton.textContent = "Save protocol";
-  els.cancelProtocolEdit.classList.add("is-hidden");
+  els.cancelProtocolEdit.classList.toggle("is-hidden", !keepOpen);
+  syncConditionalFields();
+  setCollapsibleEditorOpen(els.protocolForm, keepOpen);
 }
 
 function fillProtocolTaskForm(task) {
@@ -5292,14 +5376,17 @@ function fillProtocolTaskForm(task) {
   setFieldValue(form, "notes", task.notes);
   els.protocolTaskSubmitButton.textContent = "Update task";
   els.cancelProtocolTaskEdit.classList.remove("is-hidden");
+  setCollapsibleEditorOpen(form, true);
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function resetProtocolTaskForm() {
+function resetProtocolTaskForm(options = {}) {
+  const keepOpen = options?.keepOpen === true;
   els.protocolTaskForm.reset();
   els.protocolTaskForm.elements.id.value = "";
   els.protocolTaskSubmitButton.textContent = "Save task";
-  els.cancelProtocolTaskEdit.classList.add("is-hidden");
+  els.cancelProtocolTaskEdit.classList.toggle("is-hidden", !keepOpen);
+  setCollapsibleEditorOpen(els.protocolTaskForm, keepOpen);
 }
 
 function fillDifferentiationRunForm(run) {
@@ -5325,10 +5412,12 @@ function fillDifferentiationRunForm(run) {
 
   els.differentiationRunSubmitButton.textContent = "Update differentiation";
   els.cancelDifferentiationRunEdit.classList.remove("is-hidden");
+  setCollapsibleEditorOpen(form, true);
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function resetDifferentiationRunForm() {
+function resetDifferentiationRunForm(options = {}) {
+  const keepOpen = options?.keepOpen === true;
   els.differentiationRunForm.reset();
   delete els.differentiationRunForm.dataset.colorUserSelected;
   els.differentiationRunForm.elements.id.value = "";
@@ -5336,8 +5425,9 @@ function resetDifferentiationRunForm() {
   syncDifferentiationBatchColor(nextDifferentiationBatchColor());
   setCheckedValues(els.differentiationWellCheckboxes, []);
   els.differentiationRunSubmitButton.textContent = "Start differentiation";
-  els.cancelDifferentiationRunEdit.classList.add("is-hidden");
+  els.cancelDifferentiationRunEdit.classList.toggle("is-hidden", !keepOpen);
   syncDifferentiationSourceFields();
+  setCollapsibleEditorOpen(els.differentiationRunForm, keepOpen);
 }
 
 function fillDifferentiationEventForm(differentiationEvent) {
@@ -5362,10 +5452,12 @@ function fillEventForm(cultureEvent) {
   syncActivityTargetFields();
   syncActivityEventFields();
   syncConditionalFields();
+  setCollapsibleEditorOpen(form, true);
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function resetEventForm() {
+function resetEventForm(options = {}) {
+  const keepOpen = options?.keepOpen === true;
   els.eventForm.reset();
   els.eventForm.elements.id.value = "";
   els.eventForm.elements.record_kind.value = "";
@@ -5376,10 +5468,11 @@ function resetEventForm() {
   setDefaultDate(els.eventForm, "event_date");
   setSelectOrCustom(els.performedBySelect, els.eventForm.elements.custom_performed_by, profileName(state.profile));
   els.eventSubmitButton.textContent = "Record event";
-  els.cancelEventEdit.classList.add("is-hidden");
+  els.cancelEventEdit.classList.toggle("is-hidden", !keepOpen);
   syncActivityTargetFields();
   syncActivityEventFields();
   syncConditionalFields();
+  setCollapsibleEditorOpen(els.eventForm, keepOpen);
 }
 
 function fillCultureForm(culture) {
@@ -5403,10 +5496,12 @@ function fillCultureForm(culture) {
   els.createPlateFromCultureButton.classList.remove("is-hidden");
   els.cancelCultureEdit.classList.remove("is-hidden");
   syncConditionalFields();
+  setCollapsibleEditorOpen(form, true);
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function resetCultureForm() {
+function resetCultureForm(options = {}) {
+  const keepOpen = options?.keepOpen === true;
   els.cultureForm.reset();
   els.cultureForm.elements.id.value = "";
   setCheckedValues(els.cultureCellLineCheckboxes, []);
@@ -5417,8 +5512,9 @@ function resetCultureForm() {
   syncCultureNameSuggestion(true);
   els.cultureSubmitButton.textContent = "Start culture";
   els.createPlateFromCultureButton.classList.add("is-hidden");
-  els.cancelCultureEdit.classList.add("is-hidden");
+  els.cancelCultureEdit.classList.toggle("is-hidden", !keepOpen);
   syncConditionalFields();
+  setCollapsibleEditorOpen(els.cultureForm, keepOpen);
 }
 
 function fillVesselForm(vessel) {
@@ -5473,17 +5569,20 @@ function fillCryoBoxForm(box) {
   els.cryoBoxSubmitButton.textContent = "Update box";
   els.cancelCryoBoxEdit.classList.remove("is-hidden");
   syncConditionalFields();
+  setCollapsibleEditorOpen(form, true);
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function resetCryoBoxForm() {
+function resetCryoBoxForm(options = {}) {
+  const keepOpen = options?.keepOpen === true;
   els.cryoBoxForm.reset();
   els.cryoBoxForm.elements.id.value = "";
   setFieldValue(els.cryoBoxForm, "rows_count", 9);
   setFieldValue(els.cryoBoxForm, "columns_count", 9);
   els.cryoBoxSubmitButton.textContent = "Save box";
-  els.cancelCryoBoxEdit.classList.add("is-hidden");
+  els.cancelCryoBoxEdit.classList.toggle("is-hidden", !keepOpen);
   syncConditionalFields();
+  setCollapsibleEditorOpen(els.cryoBoxForm, keepOpen);
 }
 
 function syncConditionalFields() {
@@ -5503,6 +5602,7 @@ function syncConditionalFields() {
 }
 
 setupTabs();
+setupMobileMenu();
 setupForms();
 syncConditionalFields();
 setDefaultDate(els.cultureForm, "start_date");

@@ -8,6 +8,7 @@
   --line: #d9e0dc;
   --accent: #176f64;
   --accent-dark: #0e4f47;
+  --accent-soft: #dff0eb;
   --warning: #b66a13;
   --danger: #a63a3a;
   --blue: #2f5f98;
@@ -179,6 +180,12 @@ h3 {
   border-bottom: 1px solid var(--line);
   background: var(--surface);
   scrollbar-width: thin;
+}
+
+.mobile-menu-button,
+.mobile-menu-heading,
+.mobile-menu-backdrop {
+  display: none;
 }
 
 .nav-group {
@@ -383,9 +390,17 @@ main {
   color: var(--muted);
 }
 
+.view-add-button {
+  flex: 0 0 auto;
+}
+
+.collapsible-editor {
+  scroll-margin-top: 16px;
+}
+
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 18px;
 }
@@ -1362,8 +1377,35 @@ a:focus-visible,
   font-size: 0.86rem;
 }
 
+.protocol-panel-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.protocol-panel-controls .compact-search {
+  min-width: min(360px, 100%);
+}
+
+.protocol-import-hint {
+  margin: -4px 0 14px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.inline-editor {
+  margin: 0 0 16px;
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--line));
+  background: var(--surface-muted);
+  box-shadow: none;
+}
+
 .file-button {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -1626,6 +1668,11 @@ a:focus-visible,
   padding-left: 20px;
 }
 
+#reagentChecklistStatus:empty,
+#reagentImportStatus:empty {
+  display: none;
+}
+
 [aria-busy="true"] {
   cursor: wait;
 }
@@ -1651,9 +1698,34 @@ button[aria-busy="true"]::after {
   padding: 0 14px 14px;
 }
 
+@media (max-width: 1120px) {
+  .summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 760px) {
+  html,
   body {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  body {
+    overflow-x: hidden;
     overflow-wrap: anywhere;
+  }
+
+  body.mobile-menu-open {
+    overflow: hidden;
+  }
+
+  body > *,
+  main,
+  .view,
+  .view > *,
+  .app-shell {
+    max-width: 100%;
   }
 
   main {
@@ -1690,6 +1762,20 @@ button[aria-busy="true"]::after {
     justify-items: start;
   }
 
+  .language-control {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .language-control > span {
+    flex: 0 0 auto;
+  }
+
+  .language-control select {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
   .status-pill {
     min-width: 0;
     padding: 7px 10px;
@@ -1706,32 +1792,123 @@ button[aria-busy="true"]::after {
     flex-wrap: wrap;
   }
 
+  .mobile-menu-button {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 12px;
+    padding: 0 15px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--accent-dark);
+    font-weight: 850;
+  }
+
+  .mobile-menu-icon {
+    display: grid;
+    width: 20px;
+    gap: 4px;
+  }
+
+  .mobile-menu-icon i {
+    display: block;
+    height: 2px;
+    border-radius: 2px;
+    background: currentColor;
+  }
+
+  .mobile-menu-backdrop:not([hidden]) {
+    position: fixed;
+    z-index: 90;
+    inset: 0;
+    display: block;
+    background: rgba(10, 25, 20, 0.45);
+    backdrop-filter: blur(2px);
+  }
+
   .tabs {
-    flex-wrap: wrap;
-    gap: 10px 8px;
-    padding: 9px 12px 11px;
-    overflow-x: clip;
+    position: fixed;
+    z-index: 100;
+    inset: 0 auto 0 0;
+    display: flex;
+    width: min(86vw, 340px);
+    max-width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+    padding: 0 16px 28px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border: 0;
+    box-shadow: 14px 0 40px rgba(10, 25, 20, 0.2);
+    transform: translateX(-105%);
+    transition: transform 180ms ease;
+  }
+
+  .tabs.is-open {
+    transform: translateX(0);
+  }
+
+  .mobile-menu-heading {
+    position: sticky;
+    z-index: 1;
+    top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 -16px;
+    padding: 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .mobile-menu-heading div {
+    display: grid;
+    gap: 2px;
+  }
+
+  .mobile-menu-heading span {
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+
+  .mobile-menu-close {
+    width: 44px;
+    min-height: 44px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface-muted);
+    color: var(--text);
+    font-size: 1.7rem;
+    line-height: 1;
   }
 
   .nav-group {
-    flex: 1 1 150px;
+    display: grid;
+    flex: 0 0 auto;
     min-width: 0;
+    gap: 7px;
   }
 
   .nav-group + .nav-group {
-    padding-left: 0;
-    border-left: 0;
+    padding: 0;
+    border: 0;
   }
 
   .nav-group-tabs {
-    flex-wrap: wrap;
-    gap: 5px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
   }
 
   .tab {
-    flex: 1 1 auto;
-    min-height: 40px;
-    padding-inline: 9px;
+    width: 100%;
+    min-height: 46px;
+    padding-inline: 14px;
+    text-align: left;
     white-space: normal;
   }
 
@@ -1754,6 +1931,11 @@ button[aria-busy="true"]::after {
   .section-heading {
     gap: 10px;
     margin-bottom: 14px;
+  }
+
+  .view-add-button {
+    width: 100%;
+    align-self: stretch;
   }
 
   .form-grid,
@@ -1822,6 +2004,17 @@ button[aria-busy="true"]::after {
   }
 
   .protocol-import-bar { align-items: stretch; flex-direction: column; }
+
+  .protocol-panel-controls,
+  .protocol-panel-controls > *,
+  .protocol-panel-controls .compact-search {
+    width: 100%;
+    max-width: none;
+  }
+
+  .protocol-panel-controls {
+    align-items: stretch;
+  }
   .schedule-row { grid-template-columns: 1fr; gap: 6px; }
   .batch-color-controls { grid-template-columns: 1fr; }
   .batch-custom-color { justify-content: start; }
@@ -1917,20 +2110,22 @@ button[aria-busy="true"]::after {
   }
 
   .plate-map {
-    grid-template-columns: repeat(var(--plate-columns), minmax(52px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow-x: visible;
   }
 
   .cryo-map {
-    grid-template-columns: repeat(var(--cryo-columns), minmax(52px, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    overflow-x: visible;
   }
 
   .well {
-    min-width: 52px;
+    min-width: 0;
     min-height: 58px;
   }
 
   .cryo-slot {
-    min-width: 52px;
+    min-width: 0;
   }
 }
 

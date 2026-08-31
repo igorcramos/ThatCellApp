@@ -18,6 +18,16 @@ assert.deepEqual(duplicates, [], "translation keys must be unique");
   "Protocol adjustments",
   "Task completed off schedule",
   "No plate",
+  "New cell line",
+  "New culture",
+  "New cryobox",
+  "New project",
+  "New differentiation",
+  "Record activity",
+  "New protocol",
+  "New task",
+  "Reagent workspace",
+  "Add reagent",
 ].forEach((key) => assert(keys.includes(key), `missing Portuguese translation for: ${key}`));
 
 assert.match(i18n, /\^Minimum \(\\d\+/, "inventory minimum translation must require a numeric value");
@@ -63,12 +73,17 @@ assert.match(mediaCss, /\.media-results-wrap\s*\{[^}]*max-width:\s*100%;[^}]*ove
 
 const appCss = read("styles.css");
 assert.match(appCss, /body\s*\{[^}]*overflow-x:\s*clip;/s, "the app shell must not overflow the viewport");
-assert.match(appCss, /@media \(max-width: 760px\)[\s\S]*?\.tabs\s*\{[^}]*flex-wrap:\s*wrap;[^}]*overflow-x:\s*clip;/s,
-  "mobile navigation must wrap instead of requiring horizontal scrolling");
+assert.match(appCss, /@media \(max-width: 760px\)[\s\S]*?\.tabs\s*\{[^}]*position:\s*fixed;[^}]*flex-direction:\s*column;[^}]*overflow-x:\s*hidden;/s,
+  "mobile navigation must use a vertical off-canvas menu without horizontal scrolling");
+assert.match(appCss, /@media \(max-width: 760px\)[\s\S]*?\.nav-group-tabs\s*\{[^}]*grid-template-columns:\s*1fr;/s,
+  "mobile navigation options must be listed vertically");
+assert.match(mediaCss, /@media \(max-width: 620px\)[\s\S]*?\.media-results,[\s\S]*?display:\s*block;/s,
+  "culture media results must become readable cards on phones");
 assert.match(appCss, /@media \(max-width: 760px\)[\s\S]*?\.schedule-task\s*\{[^}]*grid-template-columns:\s*1fr;/s,
   "schedule cards must use one column on narrow screens");
 
 const reagentOperations = read("reagent-operations.js");
+const reagentInventory = read("reagent-inventory.js");
 assert.match(reagentOperations, /scannerRequestId:\s*0/);
 assert.match(reagentOperations, /requestId !== reagentOpsState\.scannerRequestId/);
 assert.match(reagentOperations, /stream\?\.getTracks\?\.\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
@@ -91,6 +106,33 @@ assert.doesNotMatch(reagentCss, /#reagentWeeklyCheckForm > \.form-actions\s*\{[^
 
 const index = read("index.html");
 const app = read("app.js");
+const indexIds = [...index.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
+const duplicateIds = indexIds.filter((id, position) => indexIds.indexOf(id) !== position);
+assert.deepEqual(duplicateIds, [], "HTML ids must stay unique after reorganizing the views");
+
+[
+  ["cellLineForm", "newCellLineButton"],
+  ["cultureForm", "newCultureButton"],
+  ["cryoBoxForm", "newCryoBoxButton"],
+  ["projectForm", "newProjectButton"],
+  ["differentiationRunForm", "newDifferentiationRunButton"],
+  ["eventForm", "newEventButton"],
+  ["protocolForm", "newProtocolButton"],
+  ["protocolTaskForm", "newProtocolTaskButton"],
+].forEach(([formId, buttonId]) => {
+  assert.match(index, new RegExp(`<form class="[^"]*collapsible-editor[^"]*is-hidden[^"]*" id="${formId}"`), `${formId} must start closed`);
+  assert.match(index, new RegExp(`id="${buttonId}"[^>]*data-open-editor="${formId}"[^>]*aria-expanded="false"`), `${buttonId} must disclose ${formId}`);
+});
+assert.equal([...index.matchAll(/data-reagent-section=/g)].length, 5, "reagents must expose five internal navigation tabs");
+assert.equal([...index.matchAll(/data-reagent-panel=/g)].length, 5, "reagents must expose five matching panels");
+const reagentStockMarkup = index.slice(index.indexOf('id="reagentStockPanel"'), index.indexOf('id="reagentCatalogPanel"'));
+assert(reagentStockMarkup.indexOf("Current stock") < reagentStockMarkup.indexOf('id="reagentItemForm"'), "current stock must appear before the reagent editor");
+assert.match(reagentStockMarkup, /id="newReagentItem"[^>]*aria-controls="reagentItemForm"[^>]*aria-expanded="false"/, "reagent stock needs an explicit add action");
+assert.match(reagentStockMarkup, /<form class="form-grid is-hidden" id="reagentItemForm">/, "the reagent editor must start closed");
+assert.match(app, /function setCollapsibleEditorOpen\(form, isOpen\)/, "shared editor disclosure must update form visibility");
+assert.match(app, /const formId = form\.getAttribute\("id"\);/, "editor disclosure must not be shadowed by form controls named id");
+assert.match(app, /resetterForCollapsibleEditor\(formId\)\?\.\(\{ keepOpen: true \}\)/, "new actions must reset editors before opening");
+assert.match(app, /els\.newProtocolTaskButton\.disabled = manageableProtocols\.length === 0;/, "new protocol tasks must require an editable protocol");
 assert.match(index, /name="schedule_action" type="radio" value="planned"/,
   "off-schedule completion must offer the original scheduled date");
 assert.match(index, /I forgot to mark it/,
@@ -103,5 +145,9 @@ assert.match(index, /id="endCultureDialog"[\s\S]*Discard &amp; finish culture/,
   "active cultures must have an explicit discard workflow");
 assert.match(app, /db\.rpc\("finish_culture"[\s\S]*await loadData\(\)/,
   "finishing a culture must use the transactional database operation and reload state");
+assert.match(reagentOperations, /setReagentSection\("stock"\)/, "scanner matches must open reagent stock");
+assert.match(reagentOperations, /setReagentSection\("catalog"\)/, "unknown scanner matches must open the reagent catalog");
+assert.match(reagentInventory, /function setReagentFormOpen\(open, \{ scroll = true \} = \{\}\)/, "reagent editor visibility must be controlled centrally");
+assert.match(reagentInventory, /function editReagentItem[\s\S]*openReagentForm\(\);/, "editing a reagent must reveal the editor");
 
 console.log("UI regressions: translations, responsive layout, and scanner cancellation passed");

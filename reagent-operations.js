@@ -9,6 +9,8 @@ const reagentOpsState = {
 };
 
 const reagentOpsEls = {
+  sectionTabs: [...document.querySelectorAll("[data-reagent-section]")],
+  sectionPanels: [...document.querySelectorAll("[data-reagent-panel]")],
   barcodeInput: document.querySelector("#reagentBarcodeInput"),
   barcodeLookup: document.querySelector("#reagentBarcodeLookup"),
   scanStart: document.querySelector("#startReagentScanner"),
@@ -23,7 +25,6 @@ const reagentOpsEls = {
   alertList: document.querySelector("#reagentAlertsList"),
   qualityMetrics: document.querySelector("#reagentQualityMetrics"),
   qualityList: document.querySelector("#reagentQualityList"),
-  catalogTools: document.querySelector("#reagentCatalogTools"),
   catalogForm: document.querySelector("#reagentCatalogForm"),
   catalogMessage: document.querySelector("#reagentCatalogFormMessage"),
   csvInput: document.querySelector("#reagentCatalogCsv"),
@@ -35,6 +36,50 @@ const reagentOpsEls = {
   purchaseFilter: document.querySelector("#reagentPurchaseStatusFilter"),
   purchaseList: document.querySelector("#reagentPurchaseList"),
 };
+
+const REAGENT_SECTION_STORAGE_KEY = "thatcellapp-reagent-section";
+
+function setReagentSection(section, { focus = false, persist = true } = {}) {
+  const selectedTab = reagentOpsEls.sectionTabs.find((tab) => tab.dataset.reagentSection === section)
+    || reagentOpsEls.sectionTabs[0];
+  if (!selectedTab) return;
+  const selectedSection = selectedTab.dataset.reagentSection;
+
+  reagentOpsEls.sectionTabs.forEach((tab) => {
+    const selected = tab === selectedTab;
+    tab.classList.toggle("is-active", selected);
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+  });
+  reagentOpsEls.sectionPanels.forEach((panel) => {
+    panel.hidden = panel.dataset.reagentPanel !== selectedSection;
+  });
+
+  if (selectedSection !== "overview" && reagentOpsState.scannerStream) stopReagentScanner("");
+  if (persist) {
+    try {
+      window.sessionStorage.setItem(REAGENT_SECTION_STORAGE_KEY, selectedSection);
+    } catch (_error) {
+      // Navigation still works when browser storage is unavailable.
+    }
+  }
+  if (focus) {
+    selectedTab.focus();
+    selectedTab.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }
+}
+
+function handleReagentSectionKeydown(event) {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  const currentIndex = reagentOpsEls.sectionTabs.indexOf(event.currentTarget);
+  let nextIndex = currentIndex;
+  if (event.key === "Home") nextIndex = 0;
+  else if (event.key === "End") nextIndex = reagentOpsEls.sectionTabs.length - 1;
+  else if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % reagentOpsEls.sectionTabs.length;
+  else nextIndex = (currentIndex - 1 + reagentOpsEls.sectionTabs.length) % reagentOpsEls.sectionTabs.length;
+  setReagentSection(reagentOpsEls.sectionTabs[nextIndex]?.dataset.reagentSection, { focus: true });
+}
 
 function reagentCode(value) {
   return String(value || "").trim();
@@ -117,6 +162,7 @@ function cameraFailureStatus(error) {
 }
 
 function focusInventoryCode(code, item) {
+  setReagentSection("stock");
   reagentEls.inventorySearch.value = code;
   renderReagentInventory();
   reagentEls.inventoryList.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -124,13 +170,15 @@ function focusInventoryCode(code, item) {
 }
 
 function focusCatalogCode(code, catalog) {
+  setReagentSection("stock");
+  openReagentForm({ reset: true, scroll: false });
   selectCatalogReagent(catalog.id);
   reagentEls.form.scrollIntoView({ behavior: "smooth", block: "start" });
   setScannerStatus(`Found ${reagentCatalogLabel(catalog)}. Complete the lot details below.`);
 }
 
 function prepareCatalogForUnknownCode(code) {
-  reagentOpsEls.catalogTools.open = true;
+  setReagentSection("catalog");
   const form = reagentOpsEls.catalogForm;
   if (validGtin(code)) form.elements.gtin.value = code;
   else form.elements.barcode.value = code;
@@ -165,6 +213,8 @@ function lookupReagentCode(rawValue) {
     return;
   }
   if (partialMatches.length > 1) {
+    setReagentSection("stock");
+    openReagentForm({ reset: true, scroll: false });
     reagentEls.librarySearch.value = code;
     renderReagentLibraryResults();
     reagentEls.libraryResults.classList.add("is-open");
@@ -696,6 +746,10 @@ function handleReagentsLoaded() {
 }
 
 reagentOpsEls.barcodeLookup.addEventListener("click", () => lookupReagentCode(reagentOpsEls.barcodeInput.value));
+reagentOpsEls.sectionTabs.forEach((tab) => {
+  tab.addEventListener("click", () => setReagentSection(tab.dataset.reagentSection));
+  tab.addEventListener("keydown", handleReagentSectionKeydown);
+});
 reagentOpsEls.barcodeInput.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); lookupReagentCode(event.currentTarget.value); } });
 reagentOpsEls.scanStart.addEventListener("click", startReagentScanner);
 reagentOpsEls.scanStop.addEventListener("click", () => stopReagentScanner());
@@ -720,6 +774,14 @@ window.addEventListener("app:languagechange", () => {
 });
 
 renderScannerReadiness();
+
+let savedReagentSection = "overview";
+try {
+  savedReagentSection = window.sessionStorage.getItem(REAGENT_SECTION_STORAGE_KEY) || "overview";
+} catch (_error) {
+  // Use the default section when browser storage is unavailable.
+}
+setReagentSection(savedReagentSection, { persist: false });
 
 if (db?.auth?.onAuthStateChange) {
   db.auth.onAuthStateChange((_event, session) => {

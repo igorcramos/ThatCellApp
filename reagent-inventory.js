@@ -2,6 +2,8 @@ const reagentState = { catalog: [], items: [], aliquots: [], selectedItemId: nul
 
 const reagentEls = {
   form: document.querySelector("#reagentItemForm"),
+  formTitle: document.querySelector("#reagentItemFormTitle"),
+  newItem: document.querySelector("#newReagentItem"),
   librarySearch: document.querySelector("#reagentLibrarySearch"),
   libraryResults: document.querySelector("#reagentLibraryResults"),
   inventorySearch: document.querySelector("#reagentInventorySearch"),
@@ -88,6 +90,7 @@ function renderAliquots() {
 }
 
 function openAliquots(itemId) {
+  setReagentFormOpen(false, { scroll: false });
   reagentState.selectedItemId = itemId;
   reagentEls.aliquotForm.reset();
   reagentEls.aliquotForm.elements.inventory_item_id.value = itemId;
@@ -96,25 +99,40 @@ function openAliquots(itemId) {
   reagentEls.aliquotForm.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function resetReagentForm() {
+function setReagentFormOpen(open, { scroll = true } = {}) {
+  reagentEls.form.classList.toggle("is-hidden", !open);
+  reagentEls.newItem.setAttribute("aria-expanded", String(open));
+  if (!open) return;
+  reagentEls.aliquotForm.classList.add("is-hidden");
+  if (scroll) reagentEls.form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetReagentForm({ close = true } = {}) {
   reagentEls.form.reset();
   reagentEls.form.elements.id.value = "";
   reagentEls.form.elements.catalog_reagent_id.value = "";
+  reagentEls.formTitle.textContent = "Add reagent";
   reagentEls.submit.textContent = "Add to inventory";
-  reagentEls.cancelEdit.classList.add("is-hidden");
   reagentEls.libraryResults.classList.remove("is-open");
+  if (close) setReagentFormOpen(false, { scroll: false });
+}
+
+function openReagentForm({ reset = false, scroll = true } = {}) {
+  if (reset) resetReagentForm({ close: false });
+  setReagentFormOpen(true, { scroll });
 }
 
 function editReagentItem(id) {
   const item = reagentState.items.find((entry) => entry.id === id);
   if (!item) return;
+  resetReagentForm({ close: false });
   Object.entries(item).forEach(([name, value]) => {
     if (reagentEls.form.elements[name] && name !== "reagent_catalog") reagentEls.form.elements[name].value = value ?? "";
   });
   reagentEls.librarySearch.value = reagentCatalogLabel(itemCatalog(item));
+  reagentEls.formTitle.textContent = "Edit reagent";
   reagentEls.submit.textContent = "Update inventory item";
-  reagentEls.cancelEdit.classList.remove("is-hidden");
-  reagentEls.form.scrollIntoView({ behavior: "smooth", block: "start" });
+  openReagentForm();
 }
 
 async function loadReagentInventory() {
@@ -177,7 +195,8 @@ reagentEls.libraryResults.addEventListener("click", (event) => { const option = 
 reagentEls.inventorySearch.addEventListener("input", renderReagentInventory);
 reagentEls.inventoryList.addEventListener("click", (event) => { const aliquot = event.target.closest("[data-aliquots]"); const edit = event.target.closest("[data-edit-reagent]"); if (aliquot) openAliquots(aliquot.dataset.aliquots); if (edit) editReagentItem(edit.dataset.editReagent); });
 reagentEls.form.addEventListener("submit", handleReagentSubmit);
-reagentEls.cancelEdit.addEventListener("click", resetReagentForm);
+reagentEls.newItem.addEventListener("click", () => openReagentForm({ reset: true }));
+reagentEls.cancelEdit.addEventListener("click", () => resetReagentForm());
 reagentEls.aliquotForm.addEventListener("submit", handleAliquotSubmit);
 reagentEls.closeAliquot.addEventListener("click", () => reagentEls.aliquotForm.classList.add("is-hidden"));
 reagentEls.refresh.addEventListener("click", loadReagentInventory);
