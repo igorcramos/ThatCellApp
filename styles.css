@@ -1275,8 +1275,9 @@ a:focus-visible,
 
 .cryo-map {
   --cryo-columns: 9;
+  --cryo-slot-size: 0px;
   display: grid;
-  grid-template-columns: repeat(var(--cryo-columns), minmax(54px, 1fr));
+  grid-template-columns: repeat(var(--cryo-columns), minmax(var(--cryo-slot-size), 1fr));
   gap: 8px;
   margin-bottom: 18px;
   padding: 14px;
@@ -1284,6 +1285,64 @@ a:focus-visible,
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.72);
   overflow-x: auto;
+}
+
+.cryo-map-toolbar,
+.cryo-map-legend,
+.cryo-zoom-controls {
+  display: flex;
+  align-items: center;
+}
+
+.cryo-map-toolbar {
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0 8px;
+}
+
+.cryo-map-legend {
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.cryo-map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cryo-map-legend i {
+  width: 13px;
+  height: 13px;
+  border: 1px solid #b7c5ca;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.cryo-map-legend i.is-filled {
+  border-color: rgba(47, 95, 152, 0.55);
+  background: #cfe5f7;
+}
+
+.cryo-zoom-controls {
+  gap: 7px;
+}
+
+.cryo-zoom-controls output {
+  min-width: 42px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.cryo-zoom-controls button {
+  width: 36px;
+  padding: 0;
+  font-size: 1.1rem;
 }
 
 .cryo-slot {
@@ -1317,14 +1376,23 @@ a:focus-visible,
 }
 
 .cryo-slot span {
-  display: -webkit-box;
+  display: none;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   white-space: normal;
 }
 
 .cryo-slot small {
+  display: none;
   white-space: nowrap;
+}
+
+.cryo-map.is-detailed .cryo-slot span {
+  display: -webkit-box;
+}
+
+.cryo-map.is-detailed .cryo-slot small {
+  display: block;
 }
 
 .cryo-slot small {
@@ -2115,8 +2183,10 @@ button[aria-busy="true"]::after {
   }
 
   .cryo-map {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    overflow-x: visible;
+    grid-template-columns: repeat(var(--cryo-columns), minmax(var(--cryo-slot-size), 1fr));
+    gap: 4px;
+    padding: 8px;
+    overflow-x: auto;
   }
 
   .well {
@@ -2126,6 +2196,22 @@ button[aria-busy="true"]::after {
 
   .cryo-slot {
     min-width: 0;
+    min-height: 34px;
+    padding: 3px;
+    aspect-ratio: 1;
+  }
+
+  .cryo-slot strong {
+    font-size: clamp(0.56rem, 2.2vw, 0.72rem);
+  }
+
+  .cryo-map.is-detailed .cryo-slot {
+    min-height: 62px;
+    aspect-ratio: auto;
+  }
+
+  .cryo-map-toolbar {
+    align-items: flex-start;
   }
 }
 

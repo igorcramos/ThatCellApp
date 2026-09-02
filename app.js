@@ -166,6 +166,9 @@ const els = {
   cryoMapTitle: document.querySelector("#cryoMapTitle"),
   cryoMapSubtitle: document.querySelector("#cryoMapSubtitle"),
   cryoMapGrid: document.querySelector("#cryoMapGrid"),
+  cryoZoomOut: document.querySelector("#cryoZoomOut"),
+  cryoZoomIn: document.querySelector("#cryoZoomIn"),
+  cryoZoomLevel: document.querySelector("#cryoZoomLevel"),
   cryoCellLineSelect: document.querySelector("#cryoCellLineSelect"),
   cryoCellTypeSelect: document.querySelector("#cryoCellTypeSelect"),
   customCryoCellTypeLabel: document.querySelector("#customCryoCellTypeLabel"),
@@ -2316,6 +2319,16 @@ function renderCryoMap() {
       `;
     })
     .join("");
+}
+
+function setCryoMapZoom(nextZoom) {
+  const zoom = Math.min(1.75, Math.max(1, nextZoom));
+  els.cryoMapGrid.dataset.zoom = String(zoom);
+  els.cryoMapGrid.classList.toggle("is-detailed", zoom > 1.25);
+  els.cryoMapGrid.style.setProperty("--cryo-slot-size", zoom > 1 ? `${Math.round(52 * zoom)}px` : "0px");
+  if (els.cryoZoomLevel) els.cryoZoomLevel.value = `${Math.round(zoom * 100)}%`;
+  if (els.cryoZoomOut) els.cryoZoomOut.disabled = zoom <= 1;
+  if (els.cryoZoomIn) els.cryoZoomIn.disabled = zoom >= 1.75;
 }
 
 function resetCryoVialForm() {
@@ -4858,6 +4871,9 @@ function setupForms() {
   els.projectsList.addEventListener("click", handleProjectsListClick);
   els.plateMapGrid.addEventListener("click", handlePlateMapClick);
   els.cryoMapGrid.addEventListener("click", handleCryoMapClick);
+  els.cryoZoomOut?.addEventListener("click", () => setCryoMapZoom(Number(els.cryoMapGrid.dataset.zoom || 1) - 0.25));
+  els.cryoZoomIn?.addEventListener("click", () => setCryoMapZoom(Number(els.cryoMapGrid.dataset.zoom || 1) + 0.25));
+  setCryoMapZoom(1);
   els.clearWellForm.addEventListener("click", () => {
     resetWellForm();
     renderPlateMap();

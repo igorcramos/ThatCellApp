@@ -311,12 +311,27 @@ function renderCultureMediaCalculation() {
     component,
     calculation: calculateCultureMediaComponent(component, targetVolume, targetUnit),
   }));
+  const concentrationSummary = (component) => {
+    if (component.calculation_mode === "dilution") {
+      return {
+        stock: `${cultureMediaFormatNumber(cultureMediaNumber(component.stock_value))} ${component.stock_unit || ""}`.trim(),
+        final: `${cultureMediaFormatNumber(cultureMediaNumber(component.target_value))} ${component.target_unit || ""}`.trim(),
+      };
+    }
+    if (["percent_vv", "percent_wv"].includes(component.calculation_mode)) {
+      const suffix = component.calculation_mode === "percent_vv" ? "% v/v" : "% w/v";
+      return { stock: "—", final: `${cultureMediaFormatNumber(cultureMediaNumber(component.target_value))} ${suffix}` };
+    }
+    const rate = `${cultureMediaFormatNumber(cultureMediaNumber(component.rate_value))} ${component.rate_unit || ""}`.trim();
+    const reference = `${cultureMediaFormatNumber(cultureMediaNumber(component.reference_value))} ${component.reference_unit || ""}`.trim();
+    return { stock: `${rate} / ${reference}`, final: "—" };
+  };
   cultureMediaEls.resultBody.innerHTML = calculations.map(({ component, calculation }) => `
     <tr>
       <td><strong>${escapeHtml(component.name)}</strong>${component.notes ? `<div class="media-result-formula">${escapeHtml(component.notes)}</div>` : ""}</td>
-      <td>${escapeHtml(cultureMediaModeLabel(component.calculation_mode))}</td>
+      <td>${escapeHtml(concentrationSummary(component).stock)}</td>
+      <td>${escapeHtml(concentrationSummary(component).final)}</td>
       <td>${calculation.error ? `<span class="media-result-error">${escapeHtml(cultureMediaTranslate(calculation.error))}</span>` : `<strong>${escapeHtml(calculation.result)}</strong>`}</td>
-      <td><span class="media-result-formula">${escapeHtml(calculation.formula || "—")}</span></td>
     </tr>`).join("");
 
   const unitFactor = cultureMediaVolumeUnits[targetUnit];

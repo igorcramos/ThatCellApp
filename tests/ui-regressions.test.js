@@ -68,6 +68,7 @@ assert.match(reagentCss, /\.scanner-stage\.is-hidden\s*\{\s*display:\s*none;/s);
 assert.match(reagentCss, /\.scanner-stage\.is-pending video\s*\{\s*display:\s*none;/s);
 
 const mediaCss = read("culture-media.css");
+const index = read("index.html");
 assert.match(mediaCss, /\.media-workspace\s*\{[^}]*min-width:\s*0;/s);
 assert.match(mediaCss, /\.media-results-wrap\s*\{[^}]*max-width:\s*100%;[^}]*overflow-x:\s*auto;/s);
 
@@ -79,6 +80,14 @@ assert.match(appCss, /@media \(max-width: 760px\)[\s\S]*?\.nav-group-tabs\s*\{[^
   "mobile navigation options must be listed vertically");
 assert.match(mediaCss, /@media \(max-width: 620px\)[\s\S]*?\.media-results,[\s\S]*?display:\s*block;/s,
   "culture media results must become readable cards on phones");
+assert.doesNotMatch(index, /<th>Formula \/ basis<\/th>/,
+  "culture media results must not expose the calculation formula");
+assert.match(index, /<th>Stock concentration<\/th><th>Final concentration<\/th><th>Required volume<\/th>/,
+  "culture media results must show stock, final concentration, and required volume");
+assert.match(appCss, /\.cryo-map\s*\{[^}]*grid-template-columns:\s*repeat\(var\(--cryo-columns\),/s,
+  "cryobox maps must preserve their configured column count");
+assert.match(appCss, /\.cryo-slot span\s*\{[^}]*display:\s*none;/s,
+  "cryobox slots must keep details hidden at overview zoom");
 assert.match(appCss, /@media \(max-width: 760px\)[\s\S]*?\.schedule-task\s*\{[^}]*grid-template-columns:\s*1fr;/s,
   "schedule cards must use one column on narrow screens");
 
@@ -104,7 +113,6 @@ assert.match(reagentCss, /@media \(max-width: 760px\)[\s\S]*?\.reagent-checklist
 assert.doesNotMatch(reagentCss, /#reagentWeeklyCheckForm > \.form-actions\s*\{[^}]*position:\s*sticky;/s,
   "the save action must not cover mobile checklist fields");
 
-const index = read("index.html");
 const app = read("app.js");
 const indexIds = [...index.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
 const duplicateIds = indexIds.filter((id, position) => indexIds.indexOf(id) !== position);

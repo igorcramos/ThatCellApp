@@ -367,7 +367,7 @@
   }
 
   .media-results td:nth-child(1)::before { content: "Component"; }
-  .media-results td:nth-child(2)::before { content: "Calculation"; }
-  .media-results td:nth-child(3)::before { content: "Required"; }
-  .media-results td:nth-child(4)::before { content: "Formula"; }
+  .media-results td:nth-child(2)::before { content: "Stock"; }
+  .media-results td:nth-child(3)::before { content: "Final"; }
+  .media-results td:nth-child(4)::before { content: "Required volume"; }
 }
