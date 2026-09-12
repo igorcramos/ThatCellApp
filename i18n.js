@@ -311,6 +311,8 @@
     "Batch preview": "Prévia da leva",
     "New batch": "Nova leva",
     "Color option": "Opção de cor",
+    "Start another protocol": "Iniciar outro protocolo",
+    "Select the wells for this protocol. For a different purpose, start another protocol with a different selection. Existing runs are shown beside each well.": "Selecione os poços para este protocolo. Para outra finalidade, inicie outro protocolo com uma seleção diferente. Os protocolos existentes aparecem ao lado de cada poço.",
     "Start differentiation": "Iniciar diferenciação",
     "Differentiation runs": "Diferenciações",
     "Run schedule": "Cronograma da execução",

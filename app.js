@@ -1921,6 +1921,7 @@ function renderDifferentiationRuns() {
           </div>
           <div class="item-actions">
             <span class="badge differentiation-run-status">${escapeHtml(run.status || "active")}</span>
+            <button class="secondary-button" data-branch-differentiation-run="${run.id}" type="button">Start another protocol</button>
             <button class="icon-button edit-button" data-edit-differentiation-run="${run.id}" type="button" title="Edit differentiation" aria-label="Edit differentiation">&#9998;</button>
             <button class="icon-button danger-button" data-delete-differentiation-run="${run.id}" type="button" title="Delete differentiation" aria-label="Delete differentiation">&#128465;</button>
           </div>
@@ -2092,6 +2093,38 @@ function renderRunSchedule() {
   }).join("") || '<div class="empty-state">This protocol has no scheduled tasks.</div>';
 }
 
+function protocolsForSourceWell(vesselId, wellName, excludedRunId = null) {
+  return state.differentiationRuns.filter((run) => {
+    if (run.id === excludedRunId || !["active", "planned", "paused"].includes(run.status)) return false;
+    if (run.source_type === "culture") return cultureIdsForVessel(vesselId).includes(run.source_culture_id);
+    if (run.source_vessel_id !== vesselId) return false;
+    return run.source_type === "vessel" || state.differentiationRunWells.some((link) =>
+      link.differentiation_run_id === run.id && link.vessel_id === vesselId && link.well === wellName);
+  });
+}
+
+function startAnotherDifferentiationProtocol(run) {
+  resetDifferentiationRunForm({ keepOpen: true });
+  const form = els.differentiationRunForm;
+  const vessel = state.vessels.find((item) => item.id === run.source_vessel_id);
+  setFieldValue(form, "source_type", vessel && isMultiwell(vessel.vessel_type) ? "wells" : run.source_type || "culture");
+  setFieldValue(form, "source_culture_id", run.source_culture_id);
+  setFieldValue(form, "source_vessel_id", run.source_vessel_id);
+  setSelectOrCustom(els.runProjectSelect, form.elements.custom_project, run.project || projectForDifferentiationRun(run));
+  // A new purpose must explicitly choose its own protocol and name.
+  setFieldValue(form, "protocol_id", "");
+  syncDifferentiationSourceFields();
+  if (vessel && form.elements.source_type.value === "wells") {
+    const available = state.vesselWells.filter((well) => well.vessel_id === vessel.id
+      && lineageIdsForMappedWell(well).length > 0
+      && protocolsForSourceWell(vessel.id, well.well).length === 0).map((well) => well.well);
+    setCheckedValues(els.differentiationWellCheckboxes, available);
+    renderDifferentiationLineageSummary();
+  }
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  form.elements.run_name.focus();
+}
+
 function renderDifferentiationWellCheckboxes() {
   const sourceType = els.differentiationSourceType.value;
   const vesselId = els.differentiationVesselSelect.value;
@@ -2122,10 +2155,12 @@ function renderDifferentiationWellCheckboxes() {
     .map((wellName) => {
       const well = mappedWells.get(wellName);
       const label = well?.condition_label || preferredCellLineName(well?.cell_lines) || "Empty";
+      const assigned = protocolsForSourceWell(vessel.id, wellName, els.differentiationRunForm.elements.id.value);
+      const usage = assigned.length ? ` · ${assigned.map((run) => run.run_name).join(", ")}` : "";
       return `
         <label class="checkbox-label">
           <input type="checkbox" value="${wellName}">
-          ${escapeHtml(`${wellName} - ${label}`)}
+          ${escapeHtml(`${wellName} - ${label}${usage}`)}
         </label>
       `;
     })
@@ -4989,6 +5024,12 @@ function handleProtocolTasksListClick(event) {
 }
 
 function handleDifferentiationRunsListClick(event) {
+  const branchButton = event.target.closest("[data-branch-differentiation-run]");
+  if (branchButton) {
+    const run = state.differentiationRuns.find((item) => item.id === branchButton.dataset.branchDifferentiationRun);
+    if (run) startAnotherDifferentiationProtocol(run);
+    return;
+  }
   const deleteButton = event.target.closest("[data-delete-differentiation-run]");
   if (deleteButton) {
     deleteRecord("differentiation_runs", deleteButton.dataset.deleteDifferentiationRun, "differentiation run");
