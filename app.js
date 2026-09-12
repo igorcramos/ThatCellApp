@@ -192,6 +192,7 @@ const els = {
   differentiationCultureLabel: document.querySelector("#differentiationCultureLabel"),
   differentiationCultureSelect: document.querySelector("#differentiationCultureSelect"),
   differentiationVesselLabel: document.querySelector("#differentiationVesselLabel"),
+  differentiationVesselHelp: document.querySelector("#differentiationVesselHelp"),
   differentiationVesselSelect: document.querySelector("#differentiationVesselSelect"),
   differentiationWellsPanel: document.querySelector("#differentiationWellsPanel"),
   differentiationWellCheckboxes: document.querySelector("#differentiationWellCheckboxes"),
@@ -2150,6 +2151,7 @@ function renderDifferentiationWellCheckboxes() {
 
   els.differentiationCultureLabel.classList.toggle("is-hidden", sourceType !== "culture");
   els.differentiationVesselLabel.classList.toggle("is-hidden", !showVessel);
+  els.differentiationVesselHelp?.classList.toggle("is-hidden", !showVessel);
   els.differentiationWellsPanel.classList.toggle("is-hidden", sourceType !== "wells");
 
   if (sourceType !== "wells") {
