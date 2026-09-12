@@ -1951,14 +1951,31 @@ function carriedForwardMedium(tasks, runDay) {
     .sort((a, b) => Number(b.task_day) - Number(a.task_day))[0]?.medium || null;
 }
 
+// Split explicit activity separators, while preserving medium recipes and doses.
+function protocolActivityTitles(title) {
+  return String(title || "").split(/\s+\/\s+|[;\n]+|\s+\+\s+(?=(?:neural induction|indução neural|transfer|transferir|add |adicionar |start |iniciar |collect|coletar|replate|replaquear)\b)/i)
+    .map((part) => part.trim()).filter(Boolean);
+}
+
+function protocolChecklistActivities(task) {
+  const titles = protocolActivityTitles(task.title);
+  const translated = protocolActivityTitles(task.title_pt);
+  const localized = localizedProtocolTask(task);
+  return titles.map((title, index) => ({
+    ...localized,
+    title: window.getAppLanguage?.() === "pt" && translated.length === titles.length ? translated[index] : title,
+    scheduled_activity_index: index,
+  }));
+}
+
 function buildRunSchedule(run) {
   const allProtocolTasks = state.protocolTasks.filter((task) => task.protocol_id === run.protocol_id);
   const tasks = allProtocolTasks
     .filter((task) => hasMeaningfulProtocolValue(task.title))
-    .map((task) => {
+    .flatMap((task) => {
       const protocolDay = Number(task.task_day);
       const runDay = adjustedRunDay(run.id, protocolDay);
-      return { ...localizedProtocolTask(task), kind: "task", protocol_day: protocolDay, task_day: runDay, date: addDateValueDays(run.day_zero_date, runDay) };
+      return protocolChecklistActivities(task).map((activity) => ({ ...activity, kind: "task", protocol_day: protocolDay, task_day: runDay, date: addDateValueDays(run.day_zero_date, runDay) }));
     });
   const isMediumTask = (task) => hasMeaningfulProtocolValue(task.medium)
     || ["Media change", "Factor addition", "Replating"].includes(task.task_type);
@@ -2002,7 +2019,7 @@ function buildRunSchedule(run) {
 function completionEventForItem(run, item) {
   return state.differentiationEvents.find((event) => {
     if (event.differentiation_run_id !== run.id) return false;
-    if (item.kind === "task" && item.id) return event.protocol_task_id === item.id;
+    if (item.kind === "task" && item.id) return event.protocol_task_id === item.id && Number(event.scheduled_activity_index || 0) === Number(item.scheduled_activity_index || 0);
     if (item.kind === "automatic") return Number(event.scheduled_run_day ?? event.event_day) === Number(item.task_day) && event.event_type === "Media change" && event.scheduled_title === item.title;
     return false;
   });
@@ -2022,7 +2039,7 @@ function scheduleTaskHtml(run, item, compact = false) {
   const protocolDayNote = item.protocol_day !== undefined && Number(item.protocol_day) !== Number(item.task_day) ? ` · protocol D${item.protocol_day}` : "";
   const overdue = !completedEvent && dateValueString(item.date) < todayValue();
   return `<article class="schedule-task ${completedEvent ? "is-complete" : ""} ${overdue ? "is-overdue" : ""}" style="--run-color:${escapeHtml(runScheduleColor(run))}">
-    <div class="schedule-task-actions"><button class="task-check" data-toggle-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-day="${escapeHtml(item.task_day)}" type="button" aria-label="${completedEvent ? "Mark task incomplete" : "Mark task complete"}" aria-pressed="${completedEvent ? "true" : "false"}"><span aria-hidden="true">${completedEvent ? "✓" : ""}</span><em>${completedEvent ? "Completed" : "Complete"}</em></button>${!completedEvent ? `<button class="task-defer-button" data-defer-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-day="${escapeHtml(item.task_day)}" type="button">Defer / shift</button>` : ""}</div>
+    <div class="schedule-task-actions"><button class="task-check" data-toggle-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-activity="${escapeHtml(item.scheduled_activity_index || 0)}" data-task-day="${escapeHtml(item.task_day)}" type="button" aria-label="${completedEvent ? "Mark task incomplete" : "Mark task complete"}" aria-pressed="${completedEvent ? "true" : "false"}"><span aria-hidden="true">${completedEvent ? "✓" : ""}</span><em>${completedEvent ? "Completed" : "Complete"}</em></button>${!completedEvent ? `<button class="task-defer-button" data-defer-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-activity="${escapeHtml(item.scheduled_activity_index || 0)}" data-task-day="${escapeHtml(item.task_day)}" type="button">Defer / shift</button>` : ""}</div>
     <div>
       <div class="schedule-task-heading"><strong>${escapeHtml(item.title)}${overdue ? ' <em class="overdue-label">Overdue</em>' : ""}</strong>${compact ? `<span>${escapeHtml(formatDate(dateValueString(item.date)))}</span>` : `<span>${escapeHtml(formatDate(dateValueString(item.date)))} · run D${escapeHtml(item.task_day)}${escapeHtml(protocolDayNote)}</span>`}</div>
       ${detail ? `<p>${escapeHtml(detail)}</p>` : ""}
@@ -4083,7 +4100,8 @@ async function toggleScheduledTask(button) {
   const item = actionableScheduleItems(run).find((candidate) =>
     candidate.kind === button.dataset.taskKind &&
     Number(candidate.task_day) === taskDay &&
-    (!button.dataset.taskId || candidate.id === button.dataset.taskId)
+    (!button.dataset.taskId || candidate.id === button.dataset.taskId) &&
+    Number(candidate.scheduled_activity_index || 0) === Number(button.dataset.taskActivity || 0)
   );
   if (!item) return;
   const completed = completionEventForItem(run, item);
@@ -4125,7 +4143,8 @@ function openTaskDeferral(button) {
   const item = actionableScheduleItems(run).find((candidate) =>
     candidate.kind === button.dataset.taskKind &&
     Number(candidate.task_day) === taskDay &&
-    (!button.dataset.taskId || candidate.id === button.dataset.taskId)
+    (!button.dataset.taskId || candidate.id === button.dataset.taskId) &&
+    Number(candidate.scheduled_activity_index || 0) === Number(button.dataset.taskActivity || 0)
   );
   if (!item) return;
   pendingTaskDeferral = { run, item };
@@ -4172,6 +4191,7 @@ async function completeScheduledTask(run, item, { actualDate, deviation = null }
     event_date: actualDate,
     event_day: actualRunDay,
     scheduled_run_day: item.task_day,
+    ...(item.kind === "task" ? { scheduled_activity_index: item.scheduled_activity_index || 0 } : {}),
     event_type: item.kind === "automatic" ? "Media change" : item.task_type || "Other",
     scheduled_title: item.title,
     medium: item.medium || null,

@@ -52,6 +52,13 @@ Simple web app for cell culture tracking using Supabase.
     discard a culture, record its outcome, and stop future work from directly
     linked active differentiation batches in one transaction.
 
+19. Run `supabase/2026-08-27_trujillo_agg_bilingual_update.sql`, then
+    `supabase/2026-09-12_protocol_checklist_activities.sql` before deploying the
+    independent activity checklist. This preserves completed combined tasks and
+    allows each activity to be completed or reopened separately. Activity titles
+    can use ` / `, semicolons, or line breaks as separators; recognized actions
+    after ` + ` are also separated without splitting medium ingredients.
+
 ## Login options
 
 The secure mode uses Supabase Auth with Google sign-in as the primary path, plus
