@@ -30,6 +30,7 @@ const state = {
   differentiationRunCellLines: [],
   differentiationRunDeviations: [],
   differentiationRunWells: [],
+  differentiationRunVessels: [],
   differentiationEvents: [],
   signedPhotoUrls: new Map(),
   selectedVesselId: null,
@@ -194,6 +195,8 @@ const els = {
   differentiationVesselLabel: document.querySelector("#differentiationVesselLabel"),
   differentiationVesselHelp: document.querySelector("#differentiationVesselHelp"),
   differentiationVesselSelect: document.querySelector("#differentiationVesselSelect"),
+  differentiationVesselsPanel: document.querySelector("#differentiationVesselsPanel"),
+  differentiationVesselCheckboxes: document.querySelector("#differentiationVesselCheckboxes"),
   differentiationWellsPanel: document.querySelector("#differentiationWellsPanel"),
   differentiationWellCheckboxes: document.querySelector("#differentiationWellCheckboxes"),
   differentiationCellLineSummary: document.querySelector("#differentiationCellLineSummary"),
@@ -1289,13 +1292,21 @@ function differentiationSourceLabel(run) {
     return cultureDisplayName(state.cultures.find((culture) => culture.id === run.source_culture_id));
   }
   if (run.source_type === "vessel") {
-    return vesselDisplayName(state.vessels.find((vessel) => vessel.id === run.source_vessel_id));
+    return vesselIdsForDifferentiationRun(run)
+      .map((id) => vesselDisplayName(state.vessels.find((vessel) => vessel.id === id))).join(", ");
   }
   const wells = state.differentiationRunWells
     .filter((well) => well.differentiation_run_id === run.id)
     .map((well) => well.well)
     .sort();
   return `${vesselDisplayName(state.vessels.find((vessel) => vessel.id === run.source_vessel_id))}: ${wells.join(", ") || "selected wells"}`;
+}
+
+function vesselIdsForDifferentiationRun(run) {
+  const linked = state.differentiationRunVessels
+    .filter((link) => link.differentiation_run_id === run.id)
+    .map((link) => link.vessel_id);
+  return uniqueValues(linked.length ? linked : [run.source_vessel_id].filter(Boolean));
 }
 
 function differentiationRunLabel(run) {
@@ -1351,6 +1362,9 @@ function renderOptions() {
   els.eventCultureSelect.innerHTML = cultureOptions || '<option value="">Start a culture first</option>';
   els.eventCultureSelect.disabled = state.cultures.length === 0;
   els.differentiationCultureSelect.innerHTML = cultureOptions || '<option value="">Start a culture first</option>';
+  els.differentiationVesselCheckboxes.innerHTML = state.vessels.length
+    ? state.vessels.map((vessel) => `<label class="checkbox-label"><input type="checkbox" value="${vessel.id}">${escapeHtml(vesselDisplayName(vessel))}</label>`).join("")
+    : '<div class="empty-state">Add a plate first.</div>';
   els.eventCultureCheckboxes.innerHTML = state.cultures.length
     ? state.cultures
       .map((culture) => `
@@ -2115,7 +2129,8 @@ function protocolsForSourceWell(vesselId, wellName, excludedRunId = null) {
   return state.differentiationRuns.filter((run) => {
     if (run.id === excludedRunId || !["active", "planned", "paused"].includes(run.status)) return false;
     if (run.source_type === "culture") return cultureIdsForVessel(vesselId).includes(run.source_culture_id);
-    if (run.source_vessel_id !== vesselId) return false;
+    const runVesselIds = vesselIdsForDifferentiationRun(run);
+    if (!runVesselIds.includes(vesselId)) return false;
     return run.source_type === "vessel" || state.differentiationRunWells.some((link) =>
       link.differentiation_run_id === run.id && link.vessel_id === vesselId && link.well === wellName);
   });
@@ -2125,9 +2140,10 @@ function startAnotherDifferentiationProtocol(run) {
   resetDifferentiationRunForm({ keepOpen: true });
   const form = els.differentiationRunForm;
   const vessel = state.vessels.find((item) => item.id === run.source_vessel_id);
-  setFieldValue(form, "source_type", vessel && isMultiwell(vessel.vessel_type) ? "wells" : run.source_type || "culture");
+  setFieldValue(form, "source_type", run.source_type || "culture");
   setFieldValue(form, "source_culture_id", run.source_culture_id);
   setFieldValue(form, "source_vessel_id", run.source_vessel_id);
+  setCheckedValues(els.differentiationVesselCheckboxes, vesselIdsForDifferentiationRun(run));
   setSelectOrCustom(els.runProjectSelect, form.elements.custom_project, run.project || projectForDifferentiationRun(run));
   // A new purpose must explicitly choose its own protocol and name.
   setFieldValue(form, "protocol_id", "");
@@ -2147,11 +2163,13 @@ function renderDifferentiationWellCheckboxes() {
   const sourceType = els.differentiationSourceType.value;
   const vesselId = els.differentiationVesselSelect.value;
   const vessel = state.vessels.find((item) => item.id === vesselId);
-  const showVessel = sourceType === "vessel" || sourceType === "wells";
+  const showVessel = sourceType === "wells";
+  const showVessels = sourceType === "vessel";
 
   els.differentiationCultureLabel.classList.toggle("is-hidden", sourceType !== "culture");
   els.differentiationVesselLabel.classList.toggle("is-hidden", !showVessel);
-  els.differentiationVesselHelp?.classList.toggle("is-hidden", !showVessel);
+  els.differentiationVesselsPanel?.classList.toggle("is-hidden", !showVessels);
+  els.differentiationVesselHelp?.classList.toggle("is-hidden", !showVessels);
   els.differentiationWellsPanel.classList.toggle("is-hidden", sourceType !== "wells");
 
   if (sourceType !== "wells") {
@@ -2215,6 +2233,19 @@ function differentiationSourceLineageResolution() {
   }
 
   const vesselId = els.differentiationVesselSelect.value;
+  if (sourceType === "vessel") {
+    const vesselIds = getCheckedValues(els.differentiationVesselCheckboxes);
+    const ids = uniqueValues(vesselIds.flatMap((id) => {
+      const mappedWells = state.vesselWells.filter((well) => well.vessel_id === id);
+      return mappedWells.length > 0
+        ? mappedWells.flatMap(lineageIdsForMappedWell)
+        : cultureIdsForVessel(id).flatMap(cellLineIdsForCulture);
+    }));
+    return {
+      ids,
+      error: vesselIds.length === 0 ? "Select at least one source plate." : ids.length === 0 ? "No cell line is mapped to the selected plates." : null,
+    };
+  }
   const mappedWells = state.vesselWells.filter((well) => well.vessel_id === vesselId);
   if (sourceType === "wells") {
     const selectedWells = getCheckedValues(els.differentiationWellCheckboxes);
@@ -3022,6 +3053,7 @@ async function loadAllInternal() {
     db
       .from("differentiation_run_wells")
       .select("*"),
+    db.from("differentiation_run_vessels").select("*"),
     db.from("differentiation_run_cell_lines").select("*"),
     db.from("differentiation_run_deviations").select("*").order("created_at", { ascending: true }),
     db
@@ -3030,8 +3062,8 @@ async function loadAllInternal() {
       .order("event_date", { ascending: false })
       .order("created_at", { ascending: false }),
   ];
-  const moduleLabels = ["Projects", "Plates", "Well maps", "Plate cultures", "Culture cell lines", "Cryoboxes", "Cryovials", "Protocols", "Protocol tasks", "Differentiations", "Differentiation wells", "Differentiation cell lines", "Protocol deviations", "Differentiation activity"];
-  const [projectsResult, vesselsResult, wellsResult, vesselCulturesResult, cultureCellLinesResult, cryoBoxesResult, cryoVialsResult, protocolsResult, protocolTasksResult, differentiationRunsResult, differentiationRunWellsResult, differentiationRunCellLinesResult, differentiationRunDeviationsResult, differentiationEventsResult] = await Promise.all(
+  const moduleLabels = ["Projects", "Plates", "Well maps", "Plate cultures", "Culture cell lines", "Cryoboxes", "Cryovials", "Protocols", "Protocol tasks", "Differentiations", "Differentiation wells", "Differentiation plates", "Differentiation cell lines", "Protocol deviations", "Differentiation activity"];
+  const [projectsResult, vesselsResult, wellsResult, vesselCulturesResult, cultureCellLinesResult, cryoBoxesResult, cryoVialsResult, protocolsResult, protocolTasksResult, differentiationRunsResult, differentiationRunWellsResult, differentiationRunVesselsResult, differentiationRunCellLinesResult, differentiationRunDeviationsResult, differentiationEventsResult] = await Promise.all(
     moduleRequests.map((request, index) => moduleRequest(moduleLabels[index], request))
   );
 
@@ -3070,6 +3102,7 @@ async function loadAllInternal() {
   state.differentiationRuns = differentiationTablesMissing ? [] : differentiationRunsResult.data || [];
   refreshNewDifferentiationBatchColor();
   state.differentiationRunWells = differentiationTablesMissing ? [] : differentiationRunWellsResult.data || [];
+  state.differentiationRunVessels = differentiationRunVesselsResult.error ? [] : differentiationRunVesselsResult.data || [];
   state.differentiationRunCellLines = differentiationTablesMissing ? [] : differentiationRunCellLinesResult.data || [];
   state.differentiationRunDeviations = differentiationRunDeviationsResult.error ? [] : differentiationRunDeviationsResult.data || [];
   state.differentiationEvents = differentiationTablesMissing ? [] : differentiationEventsResult.data || [];
@@ -3084,7 +3117,7 @@ async function loadAllInternal() {
   const loadIssues = [...baseLabels.map((_, index) => loadIssueFor([
     profileResult, profilesResult, projectMembersResult, cultureMembersResult, cellLinesResult, culturesResult, eventsResult,
   ][index])), ...moduleLabels.map((_, index) => loadIssueFor([
-    projectsResult, vesselsResult, wellsResult, vesselCulturesResult, cultureCellLinesResult, cryoBoxesResult, cryoVialsResult, protocolsResult, protocolTasksResult, differentiationRunsResult, differentiationRunWellsResult, differentiationRunCellLinesResult, differentiationRunDeviationsResult, differentiationEventsResult,
+    projectsResult, vesselsResult, wellsResult, vesselCulturesResult, cultureCellLinesResult, cryoBoxesResult, cryoVialsResult, protocolsResult, protocolTasksResult, differentiationRunsResult, differentiationRunWellsResult, differentiationRunVesselsResult, differentiationRunCellLinesResult, differentiationRunDeviationsResult, differentiationEventsResult,
   ][index]))].filter(Boolean);
   showLoadIssues(loadIssues);
   if (batchCellLineTablesMissing) {
@@ -4336,8 +4369,9 @@ async function handleDifferentiationRunSubmit(event) {
   const submit = form.querySelector("button[type='submit']");
   const data = new FormData(form);
   const sourceType = valueOrNull(data.get("source_type")) || "culture";
+  const selectedVesselIds = sourceType === "vessel" ? getCheckedValues(els.differentiationVesselCheckboxes) : [];
   const sourceVesselId = sourceType === "vessel" || sourceType === "wells"
-    ? valueOrNull(data.get("source_vessel_id"))
+    ? (sourceType === "vessel" ? selectedVesselIds[0] || null : valueOrNull(data.get("source_vessel_id")))
     : null;
   const selectedWells = sourceType === "wells"
     ? getCheckedValues(els.differentiationWellCheckboxes)
@@ -4355,7 +4389,7 @@ async function handleDifferentiationRunSubmit(event) {
 
   submit.disabled = true;
   const editingId = valueOrNull(data.get("id"));
-  const { error } = await db.rpc("save_differentiation_run", {
+  const rpcArgs = {
     run_id_arg: editingId,
     protocol_id_arg: valueOrNull(data.get("protocol_id")),
     run_name_arg: valueOrNull(data.get("run_name")),
@@ -4368,7 +4402,11 @@ async function handleDifferentiationRunSubmit(event) {
     schedule_color_arg: normalizedBatchColor(data.get("schedule_color")),
     notes_arg: valueOrNull(data.get("notes")),
     source_wells_arg: selectedWells,
-  });
+  };
+  if (sourceType === "vessel") rpcArgs.source_vessel_ids_arg = selectedVesselIds;
+  const { error } = sourceType === "vessel"
+    ? await db.rpc("save_multi_vessel_differentiation_run", rpcArgs)
+    : await db.rpc("save_differentiation_run", rpcArgs);
 
   if (error) {
     submit.disabled = false;
@@ -4964,6 +5002,7 @@ function setupForms() {
   els.differentiationSourceType.addEventListener("change", syncDifferentiationSourceFields);
   els.differentiationCultureSelect.addEventListener("change", renderDifferentiationLineageSummary);
   els.differentiationVesselSelect.addEventListener("change", syncDifferentiationSourceFields);
+  els.differentiationVesselCheckboxes.addEventListener("change", renderDifferentiationLineageSummary);
   els.differentiationWellCheckboxes.addEventListener("change", renderDifferentiationLineageSummary);
   els.activityTargetTypeSelect.addEventListener("change", syncActivityTargetFields);
   els.performedBySelect.addEventListener("change", syncConditionalFields);
@@ -5478,6 +5517,7 @@ function fillDifferentiationRunForm(run) {
   setFieldValue(form, "source_type", run.source_type || "culture");
   setFieldValue(form, "source_culture_id", run.source_culture_id);
   setFieldValue(form, "source_vessel_id", run.source_vessel_id);
+  setCheckedValues(els.differentiationVesselCheckboxes, vesselIdsForDifferentiationRun(run));
   setFieldValue(form, "status", run.status || "active");
   syncDifferentiationBatchColor(runScheduleColor(run));
   setFieldValue(form, "notes", run.notes);
@@ -5503,6 +5543,7 @@ function resetDifferentiationRunForm(options = {}) {
   setDefaultDate(els.differentiationRunForm, "day_zero_date");
   syncDifferentiationBatchColor(nextDifferentiationBatchColor());
   setCheckedValues(els.differentiationWellCheckboxes, []);
+  setCheckedValues(els.differentiationVesselCheckboxes, []);
   els.differentiationRunSubmitButton.textContent = "Start differentiation";
   els.cancelDifferentiationRunEdit.classList.toggle("is-hidden", !keepOpen);
   syncDifferentiationSourceFields();

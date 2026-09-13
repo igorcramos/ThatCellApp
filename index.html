@@ -899,8 +899,12 @@
             Source plate
             <select name="source_vessel_id" id="differentiationVesselSelect"></select>
           </label>
+          <div class="wide is-hidden" id="differentiationVesselsPanel">
+            <div class="field-label">Source plates</div>
+            <div class="checkbox-grid" id="differentiationVesselCheckboxes"></div>
+          </div>
           <p class="wide is-hidden" id="differentiationVesselHelp">
-            The same source plate can be used in two or more protocols. Create one differentiation for each portion and identify the allocation in the run name or notes.
+            Select every plate starting this protocol. The plates may contain different cell lines, and the same source plate can also be shared with another protocol.
           </p>
           <div class="wide">
             <div class="field-label">Cell lines inherited from source</div>
@@ -1695,12 +1699,12 @@
 
     <script src="supabase-js.min.js?v=20260714a"></script>
     <script src="supabase-local.js?v=20260714a"></script>
-    <script src="i18n.js?v=20260912b"></script>
+    <script src="i18n.js?v=20260913a"></script>
     <script src="zxing-browser.min.js?v=0.2.0"></script>
     <script src="barcode-scanner.js?v=20260810a"></script>
     <script src="schedule-calendar.js?v=20260809a"></script>
     <script src="shared-library.js?v=20260812b"></script>
-    <script src="app.js?v=20260912b"></script>
+    <script src="app.js?v=20260913a"></script>
     <script src="reagent-inventory.js?v=20260827c"></script>
     <script src="reagent-checklists.js?v=20260827a"></script>
     <script src="reagent-operations.js?v=20260827c"></script>
