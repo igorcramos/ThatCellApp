@@ -2124,7 +2124,7 @@ function renderTodayDifferentiationTasks() {
     .sort((a, b) => dateValueString(a.item.date).localeCompare(dateValueString(b.item.date)));
   els.todayDifferentiationTasks.innerHTML = due.length
     ? due.map(({ run, item }) => scheduleTaskHtml(run, item, true)).join("")
-    : '<div class="empty-state">No differentiation tasks scheduled for today.</div>';
+    : '<p class="empty-state" role="status">No differentiation tasks scheduled for today.</p>';
 }
 
 function renderCalendarRunFilters() {
@@ -2133,7 +2133,7 @@ function renderCalendarRunFilters() {
   const runs = state.differentiationRuns.filter((run) => run.status === "active" && buildRunSchedule(run).length > 0);
   els.calendarRunCheckboxes.innerHTML = runs.length
     ? runs.map((run) => `<label class="checkbox-label calendar-run-option" style="--run-color:${escapeHtml(runScheduleColor(run))}"><input type="checkbox" value="${run.id}" ${!wasInitialized || previousSelection.has(run.id) ? "checked" : ""}><i aria-hidden="true"></i>${escapeHtml(differentiationRunLabel(run))}</label>`).join("")
-    : '<div class="empty-state">No active batches have scheduled activities.</div>';
+    : '<p class="empty-state" role="status">No active batches have scheduled activities.</p>';
 }
 
 function renderRunDeviationSummary(run) {
