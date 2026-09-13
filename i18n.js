@@ -38,6 +38,7 @@
     "No plates match this view.": "Nenhuma placa corresponde a esta visualização.",
     "No linked culture": "Nenhuma cultura vinculada",
     "No plate activity recorded": "Nenhuma atividade registrada na placa",
+    "Observation-only tasks are kept in the protocol details": "Tarefas somente de observação ficam nos detalhes do protocolo",
     "Color theme": "Tema de cores",
     "Automatic": "Automático",
     "Light": "Claro",

@@ -2007,12 +2007,22 @@ function protocolActivityGroups(title) {
   return groups;
 }
 
+// Keep the actionable worklist focused on interventions. Observation-only
+// reminders (morphology, confluence, images and records) remain available in
+// the protocol definition but do not create checklist/calendar entries.
+function isOperationalProtocolActivity(task, title) {
+  const source = `${task?.task_type || ""} ${title || ""}`.toLowerCase();
+  if (/morpholog|confluence|inspect|observation|observe|image|photograph|record|registr|monitor|check\b|verif/i.test(source)) return false;
+  return /medium|meio|factor|fator|fgf|egf|rocki|emric|add\b|adicionar|remove|retir|change|troca|replace|substitut|plate|plac|replate|replaque|transfer|transf|induction|indu[cç][aã]o|neural|aggregate|agreg|differentiat|diferenc|maintenance|manuten|seed|semear|harvest|collect|colet|freeze|congel|thaw|descongel|passag|dissociat|feed|aliment|wash|lavar|coat|revest/i.test(source);
+}
+
 function protocolChecklistActivities(task) {
   const groups = protocolActivityGroups(task.title);
   const translated = protocolActivityGroups(task.title_pt);
   const localized = localizedProtocolTask(task);
-  return groups.map((group, position) => {
-    const displayed = window.getAppLanguage?.() === "pt" && translated.length === groups.length ? translated[position] : group;
+  return groups.filter((group) => isOperationalProtocolActivity(task, group.title)).map((group) => {
+    const translatedGroup = translated.find((candidate) => candidate.index === group.index);
+    const displayed = window.getAppLanguage?.() === "pt" && translatedGroup ? translatedGroup : group;
     return {
       ...localized,
       title: displayed.title,

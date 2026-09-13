@@ -27,6 +27,8 @@ assert.equal(grouped[1].title, 'Transfer');
 assert.equal(grouped[1].scheduled_activity_index, 3);
 assert.match(grouped[1].notes, /Medium 2 \+ FGF2 \+ EGF/);
 assert.equal(context.protocolChecklistActivities({ title: 'Medium 2 + FGF2 + EGF' }).length, 1);
+assert.equal(context.protocolChecklistActivities({ title: 'Inspect morphology and record confluence' }).length, 0);
+assert.equal(context.protocolChecklistActivities({ title: 'Image plate; Medium change' }).length, 1);
 state.differentiationEvents.push({ id: 'historical', differentiation_run_id: 'run', protocol_task_id: 'quantities', scheduled_activity_index: 3 });
 assert.equal(context.completionEventForItem({ id: 'run' }, { ...grouped[1], kind: 'task' }).id, 'historical');
 state.differentiationEvents.length = 0;
