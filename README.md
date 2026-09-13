@@ -59,6 +59,15 @@ Simple web app for cell culture tracking using Supabase.
     can use ` / `, semicolons, or line breaks as separators; recognized actions
     after ` + ` are also separated without splitting medium ingredients.
 
+20. Run `supabase/2026-09-13_victorlab_sloan.sql` to add the shared
+    `VictorLab_Sloan` protocol (47 scheduled entries, D−1 through D100) and its
+    six culture-medium recipes. Source conventions and preparation notes are
+    documented in `docs/protocols/VictorLab_Sloan.md`.
+
+21. Run `supabase/2026-09-13_trujillo_200.sql` and deploy the updated `app.js`
+    to add the bilingual shared `Trujillo_200` protocol (nine explicit stages,
+    D0–D90), without inferred medium changes. See `docs/protocols/Trujillo_200.md`.
+
 ## Login options
 
 The secure mode uses Supabase Auth with Google sign-in as the primary path, plus

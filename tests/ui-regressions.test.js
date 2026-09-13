@@ -149,6 +149,8 @@ assert.match(app, /scheduleAction === "planned"[\s\S]*actualDate: pending\.plann
   "retroactive completion must persist the activity on the planned date");
 assert.match(app, /elements\.reason\.required = !isRetroactive/,
   "retroactive completion must not require a deviation reason");
+assert.doesNotMatch(app, /print-event-source|printableScheduleText\("Automatic"\)/,
+  "exported schedule cards must not show an Automatic label");
 assert.match(index, /id="endCultureDialog"[\s\S]*Discard &amp; finish culture/,
   "active cultures must have an explicit discard workflow");
 assert.match(app, /db\.rpc\("finish_culture"[\s\S]*await loadData\(\)/,

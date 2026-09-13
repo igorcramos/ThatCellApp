@@ -187,6 +187,7 @@ const els = {
   cryoVialSubmitButton: document.querySelector("#cryoVialSubmitButton"),
   clearCryoSelection: document.querySelector("#clearCryoSelection"),
   deleteSelectedVials: document.querySelector("#deleteSelectedVials"),
+  thawSelectedVials: document.querySelector("#thawSelectedVials"),
   differentiationProtocolSelect: document.querySelector("#differentiationProtocolSelect"),
   taskProtocolSelect: document.querySelector("#taskProtocolSelect"),
   differentiationSourceType: document.querySelector("#differentiationSourceType"),
@@ -803,10 +804,14 @@ function xlsCell(value) {
   return escapeHtml(value === null || value === undefined ? "" : String(value));
 }
 
+function isStoredCryoVial(vial) {
+  return vial && !["thawed", "discarded"].includes(vial.status);
+}
+
 function cryoExportRows(box) {
   const vials = new Map(
     state.cryoVials
-      .filter((vial) => vial.box_id === box.id)
+      .filter((vial) => vial.box_id === box.id && isStoredCryoVial(vial))
       .map((vial) => [vial.position, vial])
   );
   const columns = Math.max(1, Number(box.columns_count || 9));
@@ -1427,6 +1432,18 @@ function renderOptions() {
     projectOptions,
     '<option value="__add">Add...</option>',
   ].join("");
+  const selectedProtocolProject = els.protocolProjectSelect.value;
+  const protocolMemberIds = new Set(projectIdsForMember(currentUserId()));
+  const editableProtocolProjects = state.projects.filter((project) => !state.authAvailable
+    || isAdmin() || protocolMemberIds.has(project.id));
+  const protocolProjectValues = uniqueValues([
+    ...editableProtocolProjects.map((project) => project.name),
+    selectedProtocolProject && selectedProtocolProject !== "__add" ? selectedProtocolProject : null,
+  ]).sort((a, b) => a.localeCompare(b));
+  els.protocolProjectSelect.innerHTML = '<option value="">Not specified</option>'
+    + protocolProjectValues.map((project) => `<option value="${escapeHtml(project)}">${escapeHtml(project)}</option>`).join("")
+    + '<option value="__add">Add...</option>';
+  els.protocolProjectSelect.value = selectedProtocolProject;
   els.historyProjectFilter.value = selectedHistoryProject;
   els.protocolTaskProjectFilter.value = selectedTaskProject;
   els.projectViewFilter.value = selectedProjectView;
@@ -1600,7 +1617,7 @@ function renderCryoBoxes() {
 
   els.cryoBoxesList.innerHTML = state.cryoBoxes
     .map((box) => {
-      const vialCount = state.cryoVials.filter((vial) => vial.box_id === box.id && vial.status !== "discarded").length;
+      const vialCount = state.cryoVials.filter((vial) => vial.box_id === box.id && isStoredCryoVial(vial)).length;
       const totalPositions = (box.rows_count || 9) * (box.columns_count || 9);
       const meta = [
         box.project,
@@ -1640,7 +1657,7 @@ function renderCryoSearchResults() {
       box: state.cryoBoxes.find((item) => item.id === vial.box_id),
     }))
     .filter(({ vial, box }) => {
-      if (vial.status === "discarded") return false;
+      if (!isStoredCryoVial(vial)) return false;
       if (!query) return true;
       return cryoVialSearchText(vial, box).includes(query);
     });
@@ -1972,15 +1989,37 @@ function protocolActivityTitles(title) {
     .map((part) => part.trim()).filter(Boolean);
 }
 
+function protocolActivityGroups(title) {
+  const groups = [];
+  const leadingNotes = [];
+  protocolActivityTitles(title).forEach((part, index) => {
+    // Quantities and recipes describe an action; they are not independent work.
+    const observation = /^(?:[\d.,µμ]+(?:\s|m[lL]|[µμ]L)|(?:cell(?:s)?\s*(?:number|density|\/\s*well)|n[uú]mero de c[eé]lulas|densidade|volume|medium composition|composi[çc][aã]o|medium\s*\d|meio\s*\d|ROCKi\b|FGF2\b|EGF\b|BDNF\b|GDNF\b|NT-3\b|B27\b|N2\b|DMEM\b|Neurobasal\b|Emricasen\b|retain\b|no change\b|incubate\b|incubar\b|manter\b|sem troca\b))/i.test(part);
+    if (observation) {
+      if (groups.length) groups[groups.length - 1].notes.push(part);
+      else leadingNotes.push(part);
+    } else {
+      // Retain original indices so completed actions keep their identity.
+      groups.push({ title: part, index, notes: groups.length ? [] : leadingNotes.splice(0) });
+    }
+  });
+  if (!groups.length && leadingNotes.length) groups.push({ title: leadingNotes.shift(), index: 0, notes: leadingNotes });
+  return groups;
+}
+
 function protocolChecklistActivities(task) {
-  const titles = protocolActivityTitles(task.title);
-  const translated = protocolActivityTitles(task.title_pt);
+  const groups = protocolActivityGroups(task.title);
+  const translated = protocolActivityGroups(task.title_pt);
   const localized = localizedProtocolTask(task);
-  return titles.map((title, index) => ({
-    ...localized,
-    title: window.getAppLanguage?.() === "pt" && translated.length === titles.length ? translated[index] : title,
-    scheduled_activity_index: index,
-  }));
+  return groups.map((group, position) => {
+    const displayed = window.getAppLanguage?.() === "pt" && translated.length === groups.length ? translated[position] : group;
+    return {
+      ...localized,
+      title: displayed.title,
+      notes: [displayed.notes.join("; "), localized.notes].filter(Boolean).join(" · "),
+      scheduled_activity_index: group.index,
+    };
+  });
 }
 
 function buildRunSchedule(run) {
@@ -1995,14 +2034,15 @@ function buildRunSchedule(run) {
   const isMediumTask = (task) => hasMeaningfulProtocolValue(task.medium)
     || ["Media change", "Factor addition", "Replating"].includes(task.task_type);
   const explicitMediumDays = new Set(tasks.filter(isMediumTask).map((task) => Number(task.task_day)));
-  const configuredDuration = Number(state.differentiationProtocols.find((protocol) => protocol.id === run.protocol_id)?.expected_duration_days || 0);
+  const protocol = state.differentiationProtocols.find((protocol) => protocol.id === run.protocol_id);
+  const configuredDuration = Number(protocol?.expected_duration_days || 0);
   const importedDuration = Math.max(0, ...allProtocolTasks.map((task) => Number(task.task_day) || 0));
   const hasMaintenancePhase = tasks.some((task) => /maintenance|organoids? formed/i.test(`${task.title || ""} ${task.medium || ""}`));
   const protocolDuration = Math.max(configuredDuration, importedDuration, hasMaintenancePhase ? 90 : 31);
   const duration = adjustedRunDay(run.id, protocolDuration);
   const maintenanceStartDay = adjustedRunDay(run.id, 31);
   const automaticChanges = [];
-  for (let day = 3; day <= duration; day += 1) {
+  for (let day = 3; protocol?.automatic_media_changes !== false && day <= duration; day += 1) {
     const date = addDateValueDays(run.day_zero_date, day);
     const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
     const isMaintenancePhase = day > maintenanceStartDay;
@@ -2028,7 +2068,7 @@ function buildRunSchedule(run) {
   const collections = state.differentiationEvents
     .filter((event) => event.differentiation_run_id === run.id && event.event_type === "Collection")
     .map((event) => ({ ...event, kind: "collection", task_day: event.event_day ?? protocolDayForDate(run.day_zero_date, event.event_date), date: dateValueString(event.event_date), title: event.experiment || "Collection" }));
-  return [...tasks, ...automaticChanges, ...deviations, ...collections].sort((a, b) => dateValueString(a.date).localeCompare(dateValueString(b.date)) || (a.kind === "collection" ? 1 : -1));
+  return [...tasks, ...automaticChanges, ...deviations, ...collections].sort((a, b) => dateValueString(a.date).localeCompare(dateValueString(b.date)) || Number(a.kind === "collection") - Number(b.kind === "collection"));
 }
 
 function completionEventForItem(run, item) {
@@ -2050,7 +2090,7 @@ function actionableScheduleItems(run) {
 
 function scheduleTaskHtml(run, item, compact = false) {
   const completedEvent = completionEventForItem(run, item);
-  const detail = item.medium && String(item.medium).trim() !== "-" ? item.medium : item.notes || "";
+  const detail = [...new Set([item.medium, item.notes].filter(hasMeaningfulProtocolValue))].join(" · ");
   const protocolDayNote = item.protocol_day !== undefined && Number(item.protocol_day) !== Number(item.task_day) ? ` · protocol D${item.protocol_day}` : "";
   const overdue = !completedEvent && dateValueString(item.date) < todayValue();
   return `<article class="schedule-task ${completedEvent ? "is-complete" : ""} ${overdue ? "is-overdue" : ""}" style="--run-color:${escapeHtml(runScheduleColor(run))}">
@@ -2380,7 +2420,7 @@ function renderCryoMap() {
   const positions = cryoPositionsForBox(box);
   const vialRecords = new Map(
     state.cryoVials
-      .filter((vial) => vial.box_id === box.id)
+      .filter((vial) => vial.box_id === box.id && isStoredCryoVial(vial))
       .map((vial) => [vial.position, vial])
   );
 
@@ -2736,7 +2776,7 @@ function renderMetrics() {
   els.lineCount.textContent = state.cellLines.length;
   els.activeCultureCount.textContent = state.cultures.filter((culture) => culture.status === "active").length;
   els.vesselCount.textContent = state.vessels.length;
-  els.cryoVialCount.textContent = state.cryoVials.filter((vial) => vial.status !== "discarded").length;
+  els.cryoVialCount.textContent = state.cryoVials.filter(isStoredCryoVial).length;
   els.differentiationCount.textContent = state.differentiationRuns.filter((run) => run.status === "active").length;
   els.eventCount.textContent = state.events.length + state.differentiationEvents.length;
 }
@@ -2853,6 +2893,7 @@ function renderAll() {
   renderProjects();
   renderMembers();
   renderMetrics();
+  if (typeof renderCultureBoard === "function") renderCultureBoard();
 }
 
 async function ensureCurrentProfile() {
@@ -3775,23 +3816,13 @@ async function handleCryoVialSubmit(event) {
     notes: valueOrNull(data.get("notes")),
   }));
 
-  const { error: deleteError } = await db
-    .from("cryo_vials")
-    .delete()
-    .eq("box_id", boxId)
-    .in("position", positions);
-
-  if (deleteError) {
-    submit.disabled = false;
-    showToast(`Error preparing positions: ${deleteError.message}`);
-    return;
-  }
-
-  const { error } = await db.from("cryo_vials").insert(payload);
+  const { error } = await db.rpc("save_cryo_vials", { vials_arg: payload });
   submit.disabled = false;
 
   if (error) {
-    showToast(`Error saving cryovials: ${error.message}`);
+    showToast(error.code === "PGRST202"
+      ? "Cryostock needs the thaw-slot database update before saving. Your entries remain in the form."
+      : `Error saving cryovials: ${error.message}`);
     return;
   }
 
@@ -3821,6 +3852,32 @@ function handleCryoExport(format) {
   showToast("Cryostock PDF downloaded.");
 }
 
+async function handleThawSelectedVials() {
+  if (!ensureDb() || els.thawSelectedVials.disabled) return;
+  const boxId = valueOrNull(els.cryoVialForm.elements.box_id.value);
+  const selected = state.cryoVials.filter((vial) => vial.box_id === boxId
+    && state.selectedCryoPositions.has(vial.position) && isStoredCryoVial(vial));
+  if (!selected.length) return showToast("Select at least one stored vial to thaw.");
+  if (!window.confirm(`Thaw ${selected.length} selected vial${selected.length === 1 ? "" : "s"}?\n\nTheir slots will become available. This does not create a culture automatically.`)) return;
+  els.thawSelectedVials.disabled = true;
+  try {
+    const { data: updated, error } = await db.from("cryo_vials")
+      .update({ status: "thawed" }).eq("box_id", boxId)
+      .in("id", selected.map((vial) => vial.id)).select("id");
+    if (error) return showToast(`Error thawing vials: ${error.message}`);
+    if (updated?.length !== selected.length) {
+      showToast("Some vials could not be thawed. Refresh and check your access to this box.");
+      await loadAll();
+      return;
+    }
+    resetCryoVialForm();
+    await loadAll();
+    showToast(`${updated.length} vial${updated.length === 1 ? "" : "s"} thawed. Slots are now available.`);
+  } finally {
+    els.thawSelectedVials.disabled = false;
+  }
+}
+
 async function handleDeleteSelectedVials() {
   if (!ensureDb()) return;
   const boxId = valueOrNull(els.cryoVialForm.elements.box_id.value);
@@ -3829,26 +3886,39 @@ async function handleDeleteSelectedVials() {
     .map((position) => position.trim())
     .filter(Boolean) || [];
 
-  if (!boxId || positions.length === 0) {
+  const selected = state.cryoVials.filter((vial) => vial.box_id === boxId
+    && positions.includes(vial.position) && isStoredCryoVial(vial));
+  if (!boxId || selected.length === 0) {
     showToast("Select at least one vial first.");
     return;
   }
-  if (!window.confirm(`Delete ${positions.length} selected vial${positions.length === 1 ? "" : "s"}?\n\nThe selected inventory positions will become empty; this does not change the source cell line.\n\nThis action cannot be undone.`)) return;
+  if (!window.confirm(`Delete ${selected.length} selected vial${selected.length === 1 ? "" : "s"}?\n\nThe selected inventory positions will become empty; this does not change the source cell line.\n\nThis action cannot be undone.`)) return;
 
   const { error } = await db
     .from("cryo_vials")
     .delete()
     .eq("box_id", boxId)
-    .in("position", positions);
+    .in("id", selected.map((vial) => vial.id));
 
   if (error) {
     showToast(`Error deleting vials: ${error.message}`);
     return;
   }
 
-  showToast(`${positions.length} vial${positions.length === 1 ? "" : "s"} deleted.`);
+  showToast(`${selected.length} vial${selected.length === 1 ? "" : "s"} deleted.`);
   resetCryoVialForm();
   await loadAll();
+}
+
+function protocolSaveErrorMessage(error) {
+  if (error?.code === "PGRST116") return "Protocol was not saved. It may have been removed or your editing access changed. Refresh and try again.";
+  if (error?.code === "42501" || /row.level security/i.test(error?.message || "")) {
+    return "Protocol was not saved. Check your account approval, protocol ownership, and project membership. Your changes remain in the form.";
+  }
+  if (["PGRST204", "PGRST205", "42703"].includes(error?.code)) {
+    return `Protocol database setup is incomplete. Ask an administrator to apply the library and visibility migrations. Your changes remain in the form. (${error.message})`;
+  }
+  return `Error saving protocol: ${error?.message || "Please try again."}`;
 }
 
 async function handleProtocolSubmit(event) {
@@ -3858,6 +3928,11 @@ async function handleProtocolSubmit(event) {
   const submit = form.querySelector("button[type='submit']");
   const data = new FormData(form);
   const editingId = valueOrNull(data.get("id"));
+  const existing = state.differentiationProtocols.find((protocol) => protocol.id === editingId);
+  if (editingId && (!existing || !canManageLibraryRecord(existing))) {
+    showToast("Clone this shared protocol before changing it.");
+    return;
+  }
   const name = valueOrNull(data.get("name"));
   const version = valueOrNull(data.get("version"));
   const isShared = data.get("is_shared") === "on";
@@ -3877,10 +3952,18 @@ async function handleProtocolSubmit(event) {
     return;
   }
 
+  const project = valueFromSelectWithCustom(data, "project", "custom_project");
+  if (project && state.authAvailable && !isAdmin()) {
+    const memberIds = new Set(projectIdsForMember(currentUserId()));
+    if (!state.projects.some((item) => item.name === project && memberIds.has(item.id))) {
+      showToast("Choose a project you belong to, or leave Project blank. Ask an administrator to grant project access.");
+      return;
+    }
+  }
   submit.disabled = true;
   const payload = {
     name,
-    project: valueFromSelectWithCustom(data, "project", "custom_project"),
+    project,
     target_cell_type: valueOrNull(data.get("target_cell_type")),
     version,
     expected_duration_days: numberOrNull(data.get("expected_duration_days")),
@@ -3888,9 +3971,11 @@ async function handleProtocolSubmit(event) {
     is_shared: isShared,
   };
 
+  if (!editingId && currentUserId()) payload.created_by = currentUserId();
+
   const query = editingId
-    ? db.from("differentiation_protocols").update(payload).eq("id", editingId)
-    : db.from("differentiation_protocols").insert(payload);
+    ? db.from("differentiation_protocols").update(payload).eq("id", editingId).select("id").single()
+    : db.from("differentiation_protocols").insert(payload).select("id").single();
   const { error } = await query;
   submit.disabled = false;
 
@@ -3901,7 +3986,7 @@ async function handleProtocolSubmit(event) {
         : "You already have a private protocol with this name and version.");
       return;
     }
-    showToast(`Error saving protocol: ${error.message}`);
+    showToast(protocolSaveErrorMessage(error));
     return;
   }
 
@@ -3935,9 +4020,10 @@ async function handleProtocolTaskSubmit(event) {
   };
 
   const editingId = valueOrNull(data.get("id"));
+  if (!editingId && currentUserId()) payload.created_by = currentUserId();
   const query = editingId
-    ? db.from("differentiation_protocol_tasks").update(payload).eq("id", editingId)
-    : db.from("differentiation_protocol_tasks").insert(payload);
+    ? db.from("differentiation_protocol_tasks").update(payload).eq("id", editingId).select("id").single()
+    : db.from("differentiation_protocol_tasks").insert(payload).select("id").single();
   const { error } = await query;
   submit.disabled = false;
 
@@ -4293,8 +4379,6 @@ function printableScheduleText(text) {
   return window.translateAppText?.(text) || text;
 }
 
-const SCHEDULE_ENGINE_VERSION = "2026.08.12.2";
-
 function printableScheduleMonthTitle(monthKey) {
   const locale = window.getAppLocale?.() || "en-US";
   const label = new Intl.DateTimeFormat(locale, {
@@ -4312,42 +4396,54 @@ function printableScheduleWeekdays() {
   }).format(new Date(Date.UTC(2026, 7, 2 + index))));
 }
 
-function printableScheduleEntryHtml({ run, item }) {
-  const detail = item.kind === "deviation"
+function printableScheduleDetail(item) {
+  return item.kind === "deviation"
     ? [item.reason, item.notes].filter(Boolean).join(" · ")
-    : item.medium || [item.quantity, item.notes].filter(Boolean).join(" · ");
+    : [item.medium, item.quantity, item.notes].filter(Boolean).join(" · ");
+}
+
+function printableScheduleEntryHtml({ item }, { includeDetails = false } = {}) {
+  const detail = includeDetails ? printableScheduleDetail(item) : "";
   const title = printableScheduleText(item.title || item.experiment || "Collection");
-  const automaticLabel = item.kind === "automatic" ? `<span class="print-event-source">${escapeHtml(printableScheduleText("Automatic"))}</span>` : "";
-  return `<div class="print-calendar-event ${item.kind === "deviation" ? "is-deviation" : ""} ${item.kind === "automatic" ? "is-automatic" : ""}" style="--run-color:${escapeHtml(runScheduleColor(run))}">
-    <div><strong>${escapeHtml(run.run_name)}</strong><span>D${escapeHtml(item.task_day)}</span></div>
-    <h3>${escapeHtml(title)}${automaticLabel}</h3>
+  return `<div class="print-calendar-event ${item.kind === "deviation" ? "is-deviation" : ""} ${item.kind === "automatic" ? "is-automatic" : ""}">
+    <div><span class="print-task-day">D${escapeHtml(item.task_day)}</span><strong>${escapeHtml(title)}</strong></div>
     ${detail ? `<p>${escapeHtml(detail)}</p>` : ""}
   </div>`;
 }
 
-function printableScheduleHtml(runs) {
-  const scheduledRuns = runs.filter((run) => buildRunSchedule(run).length > 0);
-  const entries = scheduledRuns.flatMap((run) => buildRunSchedule(run).map((item) => ({
-    date: dateValueString(item.date),
-    run,
-    item,
-  }))).sort((a, b) => a.date.localeCompare(b.date));
+function printableScheduleDayHtml(cell, options) {
+  if (!cell) return '<td class="print-calendar-day is-empty" aria-hidden="true"></td>';
+  const groups = new Map();
+  cell.entries.forEach((entry) => {
+    if (!groups.has(entry.run.id)) groups.set(entry.run.id, { run: entry.run, entries: [] });
+    groups.get(entry.run.id).entries.push(entry);
+  });
+  return `<td class="print-calendar-day"><time datetime="${escapeHtml(cell.date)}">${cell.day}${cell.continuation ? ` <small>${escapeHtml(printableScheduleText("continued"))}</small>` : ""}</time><div class="print-calendar-events">${[...groups.values()].map(({ run, entries }) => `<section class="print-calendar-batch" style="--run-color:${escapeHtml(runScheduleColor(run))}"><h3>${escapeHtml(run.run_name || differentiationRunLabel(run))}</h3>${entries.map((entry) => printableScheduleEntryHtml(entry, options)).join("")}</section>`).join("")}</div></td>`;
+}
+
+function printableScheduleHtml(runs, { includeDetails = false } = {}) {
+  const scheduledRuns = runs.map((run) => ({ run, items: buildRunSchedule(run) })).filter(({ items }) => items.length);
+  const entries = scheduledRuns.flatMap(({ run, items }) => items.map((item) => ({
+    date: dateValueString(item.date), run, item,
+  }))).sort((a, b) => a.date.localeCompare(b.date) || String(a.run.run_name || "").localeCompare(String(b.run.run_name || "")));
   const months = window.ScheduleCalendar?.buildMonths(entries) || [];
   const weekdays = printableScheduleWeekdays();
   return months.map((month) => {
-    const monthRunIds = new Set(month.cells.filter(Boolean).flatMap((cell) => cell.entries.map((entry) => entry.run.id)));
-    const automaticChangeCount = month.cells.filter(Boolean).flatMap((cell) => cell.entries).filter((entry) => entry.item.kind === "automatic").length;
-    const legend = scheduledRuns.filter((run) => monthRunIds.has(run.id)).map((run) => `<span style="--run-color:${escapeHtml(runScheduleColor(run))}"><i></i>${deviationsForRun(run.id).length ? "⚑ " : ""}${escapeHtml(differentiationRunLabel(run))}</span>`).join("");
-    return `<section class="print-month" style="--calendar-weeks:${month.weeks}">
-    <header class="print-month-header">
-      <div><p>${escapeHtml(printableScheduleText("Monthly differentiation calendar"))}</p><h1>${escapeHtml(printableScheduleMonthTitle(month.key))}</h1><small>${escapeHtml(printableScheduleText("Generated"))} ${escapeHtml(formatDate(todayValue()))} · ${automaticChangeCount} ${escapeHtml(printableScheduleText("automatic medium changes"))} · Engine ${SCHEDULE_ENGINE_VERSION}</small></div>
-      <div class="print-legend">${legend}</div>
-    </header>
-    <div class="print-calendar-weekdays">${weekdays.map((weekday) => `<span>${escapeHtml(weekday)}</span>`).join("")}</div>
-    <div class="print-calendar-grid">${month.cells.map((cell) => cell
-      ? `<section class="print-calendar-day"><time datetime="${escapeHtml(cell.date)}">${cell.day}</time><div class="print-calendar-events">${cell.entries.map(printableScheduleEntryHtml).join("")}</div></section>`
-      : '<section class="print-calendar-day is-empty" aria-hidden="true"></section>').join("")}</div>
-  </section>`;
+    const monthEntries = month.cells.filter(Boolean).flatMap((cell) => cell.entries);
+    const monthRunIds = new Set(monthEntries.map((entry) => entry.run.id));
+    const legend = scheduledRuns.filter(({ run }) => monthRunIds.has(run.id)).map(({ run }) => `<span style="--run-color:${escapeHtml(runScheduleColor(run))}"><i></i>${deviationsForRun(run.id).length ? "⚑ " : ""}${escapeHtml(differentiationRunLabel(run))}</span>`).join("");
+    const weeks = window.ScheduleCalendar.buildPrintableWeeks(month, {
+      entrySize: ({ item, run }) => 2 + Math.ceil(String(run.run_name || "").length / 26)
+        + Math.ceil(printableScheduleText(item.title || item.experiment || "Collection").length / 30)
+        + (includeDetails ? Math.ceil(printableScheduleDetail(item).length / 34) : 0),
+    });
+    return `<section class="print-month"><table class="print-calendar-table"><thead>
+      <tr><th colspan="7" class="print-month-heading"><header class="print-month-header">
+        <div><p>${escapeHtml(printableScheduleText("Combined task calendar"))}</p><h1>${escapeHtml(printableScheduleMonthTitle(month.key))}</h1><small>${monthRunIds.size} ${escapeHtml(printableScheduleText("batches"))} · ${monthEntries.length} ${escapeHtml(printableScheduleText("tasks"))} · ${escapeHtml(printableScheduleText("Generated"))} ${escapeHtml(formatDate(todayValue()))}</small></div>
+        <div class="print-legend">${legend}</div>
+      </header></th></tr>
+      <tr class="print-calendar-weekdays">${weekdays.map((weekday) => `<th scope="col">${escapeHtml(weekday)}</th>`).join("")}</tr>
+    </thead><tbody>${weeks.map((week) => `<tr class="print-calendar-week">${week.map((cell) => printableScheduleDayHtml(cell, { includeDetails })).join("")}</tr>`).join("")}</tbody></table></section>`;
   }).join("");
 }
 
@@ -4356,7 +4452,7 @@ function printSchedules(onlySelectedRun = false) {
     ? state.differentiationRuns.filter((run) => run.id === els.scheduleRunSelect.value)
     : state.differentiationRuns.filter((run) => getCheckedValues(els.calendarRunCheckboxes).includes(run.id));
   if (!runs.length) return showToast("No differentiation runs available to export.");
-  const printable = printableScheduleHtml(runs);
+  const printable = printableScheduleHtml(runs, { includeDetails: !onlySelectedRun && Boolean(document.querySelector("#calendarIncludeDetails")?.checked) });
   if (!printable) return showToast("No scheduled items available to export.");
   els.printSchedule.innerHTML = printable;
   window.print();
@@ -4911,6 +5007,11 @@ function setupForms() {
     renderCalendarRunFilters();
     els.calendarExportDialog.showModal();
   });
+  els.calendarExportDialog.querySelectorAll("[data-calendar-selection]").forEach((button) => button.addEventListener("click", () => {
+    els.calendarRunCheckboxes.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+      input.checked = button.dataset.calendarSelection === "all";
+    });
+  }));
   els.confirmCalendarExport.addEventListener("click", () => {
     if (getCheckedValues(els.calendarRunCheckboxes).length === 0) {
       showToast("Select at least one batch to export.");
@@ -4979,6 +5080,7 @@ function setupForms() {
     renderCryoMap();
   });
   els.deleteSelectedVials.addEventListener("click", handleDeleteSelectedVials);
+  els.thawSelectedVials.addEventListener("click", handleThawSelectedVials);
   els.cancelCellLineEdit.addEventListener("click", resetCellLineForm);
   els.cancelCultureEdit.addEventListener("click", resetCultureForm);
   els.cancelVesselEdit.addEventListener("click", resetVesselForm);
@@ -5333,10 +5435,12 @@ function syncCryoVialFormSelection() {
   els.cryoVialForm.classList.remove("is-hidden");
   setFieldValue(els.cryoVialForm, "box_id", box.id);
   setFieldValue(els.cryoVialForm, "positions", selected.join(", "));
+  els.thawSelectedVials.disabled = !state.cryoVials.some((vial) => vial.box_id === box.id
+    && selected.includes(vial.position) && isStoredCryoVial(vial));
 
   if (selected.length === 1) {
     const record = state.cryoVials.find(
-      (vial) => vial.box_id === box.id && vial.position === selected[0]
+      (vial) => vial.box_id === box.id && vial.position === selected[0] && isStoredCryoVial(vial)
     );
     setFieldValue(els.cryoVialForm, "cell_line_id", record?.cell_line_id);
     setSelectOrCustom(els.cryoCellTypeSelect, els.cryoVialForm.elements.custom_cell_type, record?.cell_type);

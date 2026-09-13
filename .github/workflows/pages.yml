@@ -31,6 +31,7 @@ jobs:
           cp app.js shared-library.js schedule-calendar.js supabase-js.min.js supabase-local.js i18n.js _site/
           cp reagent-inventory.js reagent-operations.js reagent-checklists.js culture-media.js _site/
           cp barcode-scanner.js zxing-browser.min.js _site/
+          cp theme.js culture-panel.js culture-panel.css _site/
           cp -R assets _site/assets
           cp -R docs _site/docs
           touch _site/.nojekyll

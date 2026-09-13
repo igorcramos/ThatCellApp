@@ -1,0 +1,48 @@
+﻿Protocol name,Day,Base task,Medium
+VictorLab_Sloan,-1,Aggregate EBs in AggreWell 800; 3.9 million cells/well; 2 mL/well; incubate 24 h,mTeSR1 + ROCKi 10 µM (1:1000) + Emricasen (1:2000)
+VictorLab_Sloan,0,Induction: transfer EBs to 10-cm low-attachment dishes; 12 mL/dish; remove Emricasen; retain ROCKi until D2,mTeSR1 + DM 5 µM + SB 10 µM + ROCKi 10 µM (1:1000)
+VictorLab_Sloan,1,Recovery: leave undisturbed; no change,mTeSR1 + DM 5 µM + SB 10 µM + ROCKi 10 µM (D0 medium)
+VictorLab_Sloan,2,Medium change: 12 mL/dish; remove ROCKi,mTeSR1 + DM 5 µM + SB 10 µM
+VictorLab_Sloan,3,Medium change: 12 mL/dish,mTeSR1 + DM 5 µM + SB 10 µM
+VictorLab_Sloan,4,Medium change: 12 mL/dish,mTeSR1 + DM 5 µM + SB 10 µM
+VictorLab_Sloan,5,Medium change: 12 mL/dish,mTeSR1 + DM 5 µM + SB 10 µM
+VictorLab_Sloan,6,Medium change: 12 mL/dish; switch to basal NM + FGF2/EGF; remove DM/SB,Basal NM + FGF2 20 ng/mL + EGF 20 ng/mL
+VictorLab_Sloan,7,Medium change: 12 mL/dish,Basal NM + FGF2 20 ng/mL + EGF 20 ng/mL
+VictorLab_Sloan,8,Medium change: 12 mL/dish,Basal NM + FGF2 20 ng/mL + EGF 20 ng/mL
+VictorLab_Sloan,9,Medium change: 12 mL/dish,Basal NM + FGF2 20 ng/mL + EGF 20 ng/mL
+VictorLab_Sloan,10,Medium change: 12 mL/dish,Basal NM + FGF2 20 ng/mL + EGF 20 ng/mL
+VictorLab_Sloan,11,Medium change: 12 mL/dish,Basal NM + FGF2 20 ng/mL + EGF 20 ng/mL
+VictorLab_Sloan,12,Medium change: 12 mL/dish,Basal NM + FGF2 20 ng/mL + EGF 20 ng/mL
+VictorLab_Sloan,13,Medium change: 12 mL/dish,Basal NM + FGF2 20 ng/mL + EGF 20 ng/mL
+VictorLab_Sloan,14,Medium change: 12 mL/dish,Basal NM + FGF2 20 ng/mL + EGF 20 ng/mL
+VictorLab_Sloan,15,Medium change: 12 mL/dish,Basal NM + FGF2 20 ng/mL + EGF 20 ng/mL
+VictorLab_Sloan,16,Medium change: 12 mL/dish,Basal NM + FGF2 20 ng/mL + EGF 20 ng/mL
+VictorLab_Sloan,18,Medium change: 12 mL/dish,Basal NM + FGF2 20 ng/mL + EGF 20 ng/mL
+VictorLab_Sloan,20,Medium change: 12 mL/dish,Basal NM + FGF2 20 ng/mL + EGF 20 ng/mL
+VictorLab_Sloan,22,Medium change: 12 mL/dish,Basal NM + FGF2 20 ng/mL + EGF 20 ng/mL
+VictorLab_Sloan,24,Medium change: 12 mL/dish,Basal NM + FGF2 20 ng/mL + EGF 20 ng/mL
+VictorLab_Sloan,25,Medium change: 14–15 mL/dish; replace FGF2/EGF with BDNF/NT3,Basal NM + BDNF 20 ng/mL + NT3 20 ng/mL
+VictorLab_Sloan,27,Medium change: 14–15 mL/dish,Basal NM + BDNF 20 ng/mL + NT3 20 ng/mL
+VictorLab_Sloan,29,Medium change: 14–15 mL/dish,Basal NM + BDNF 20 ng/mL + NT3 20 ng/mL
+VictorLab_Sloan,31,Medium change: 14–15 mL/dish,Basal NM + BDNF 20 ng/mL + NT3 20 ng/mL
+VictorLab_Sloan,33,Medium change: 14–15 mL/dish,Basal NM + BDNF 20 ng/mL + NT3 20 ng/mL
+VictorLab_Sloan,35,Medium change: 14–15 mL/dish,Basal NM + BDNF 20 ng/mL + NT3 20 ng/mL
+VictorLab_Sloan,37,Medium change: 14–15 mL/dish,Basal NM + BDNF 20 ng/mL + NT3 20 ng/mL
+VictorLab_Sloan,39,Medium change: 14–15 mL/dish,Basal NM + BDNF 20 ng/mL + NT3 20 ng/mL
+VictorLab_Sloan,41,Medium change: 14–15 mL/dish,Basal NM + BDNF 20 ng/mL + NT3 20 ng/mL
+VictorLab_Sloan,43,Medium change: 17–18 mL/dish; remove BDNF/NT3,Basal NM; no added growth factors
+VictorLab_Sloan,47,Medium change: 17–18 mL/dish,Basal NM; no added growth factors
+VictorLab_Sloan,51,Medium change: 17–18 mL/dish,Basal NM; no added growth factors
+VictorLab_Sloan,55,Medium change: 17–18 mL/dish,Basal NM; no added growth factors
+VictorLab_Sloan,59,Medium change: 17–18 mL/dish,Basal NM; no added growth factors
+VictorLab_Sloan,63,Medium change: 17–18 mL/dish,Basal NM; no added growth factors
+VictorLab_Sloan,67,Medium change: 17–18 mL/dish,Basal NM; no added growth factors
+VictorLab_Sloan,71,Medium change: 17–18 mL/dish,Basal NM; no added growth factors
+VictorLab_Sloan,75,Medium change: 17–18 mL/dish,Basal NM; no added growth factors
+VictorLab_Sloan,79,Medium change: 17–18 mL/dish,Basal NM; no added growth factors
+VictorLab_Sloan,83,Medium change: 17–18 mL/dish,Basal NM; no added growth factors
+VictorLab_Sloan,87,Medium change: 17–18 mL/dish,Basal NM; no added growth factors
+VictorLab_Sloan,91,Medium change: 17–18 mL/dish,Basal NM; no added growth factors
+VictorLab_Sloan,95,Medium change: 17–18 mL/dish,Basal NM; no added growth factors
+VictorLab_Sloan,99,Medium change: 17–18 mL/dish,Basal NM; no added growth factors
+VictorLab_Sloan,100,"Review culture continuation; next changes D103, D107, then every 4 days",Basal NM; no added growth factors

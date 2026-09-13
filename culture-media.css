@@ -255,8 +255,8 @@
 
 .media-liquid-summary .media-summary-card.is-warning {
   border-color: #e1a34c;
-  background: #fff4df;
-  color: #70460c;
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
 .media-status {
@@ -370,4 +370,13 @@
   .media-results td:nth-child(2)::before { content: "Stock"; }
   .media-results td:nth-child(3)::before { content: "Final"; }
   .media-results td:nth-child(4)::before { content: "Required volume"; }
+}
+
+.media-component-card > *, .media-form-heading > *, .media-fieldset,
+.media-target-control, .media-inline-fields > * { min-width: 0; }
+.media-component-card strong { overflow-wrap: anywhere; }
+@media (max-width: 620px) {
+  .media-component-card { grid-template-columns: minmax(0, 1fr); }
+  .media-component-actions { justify-content: flex-end; }
+  .media-inline-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr); }
 }

@@ -2,15 +2,17 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ThatCellApp</title>
     <link rel="icon" type="image/png" sizes="1254x1254" href="assets/logo-cell-pin.png?v=20260813a">
     <link rel="shortcut icon" type="image/png" href="assets/logo-cell-pin.png?v=20260813a">
     <link rel="apple-touch-icon" href="assets/logo-cell-pin.png?v=20260813a">
     <meta name="theme-color" content="#176f64">
+    <script src="theme.js?v=20260913b"></script>
     <link rel="stylesheet" href="styles.css?v=20260831b">
     <link rel="stylesheet" href="reagent-operations.css?v=20260827c">
     <link rel="stylesheet" href="culture-media.css?v=20260831b">
+      <link rel="stylesheet" href="culture-panel.css?v=20260913a">
   </head>
   <body>
     <header class="app-header">
@@ -22,6 +24,14 @@
         </div>
       </div>
       <div class="status-stack">
+        <label class="theme-control" for="themeSelect">
+          <span>Appearance</span>
+          <select id="themeSelect" aria-label="Color theme">
+            <option value="auto">Automatic</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
         <label class="language-control" for="languageSelect">
           <span>Language</span>
           <select id="languageSelect" aria-label="Interface language">
@@ -171,6 +181,17 @@
             <strong id="eventCount">0</strong>
           </div>
         </div>
+        <div class="table-panel" id="cultureBoardPanel">
+          <div class="culture-board-heading"><div><h3>Culture board</h3><p id="cultureBoardCount">0 plates in culture</p></div></div>
+          <div class="culture-board-toolbar">
+            <label>Find plates<input type="search" id="cultureBoardFilter" placeholder="Plate, location or group"></label>
+            <label>Color by<select id="cultureBoardMode"><option value="batch">Differentiation batch</option><option value="line">Cell line</option><option value="type">Cell type</option></select></label>
+          </div>
+          <div id="cultureBoardLegend" class="culture-board-legend"></div>
+          <p class="culture-board-color-help">Tap a color to customize this board on this device.</p>
+          <div class="culture-board-selection"><span id="cultureBoardSelection" role="status">0 selected</span><button class="secondary-button compact-button" id="cultureBoardSelectAll" type="button">Select visible</button><button class="secondary-button compact-button" id="cultureBoardClear" type="button" disabled>Clear</button><button class="primary-button compact-button" id="cultureBoardBatch" type="button" disabled>Create differentiation batch</button></div>
+          <div id="cultureBoard" class="culture-board-grid"></div>
+        </div>
         <div class="table-panel">
           <h3>Ongoing cultures</h3>
           <div id="activeCulturesList" class="item-list"></div>
@@ -181,7 +202,7 @@
               <h3>Today’s differentiation tasks</h3>
               <p>Check off work to record it automatically in Activity.</p>
             </div>
-            <button class="secondary-button" id="printAllSchedules" type="button">Choose batches &amp; export</button>
+            <button class="secondary-button" id="printAllSchedules" type="button">Export combined calendar</button>
           </div>
           <div id="todayDifferentiationTasks" class="today-task-list"></div>
         </div>
@@ -672,8 +693,6 @@
                 <select name="status">
                   <option value="available">Available</option>
                   <option value="reserved">Reserved</option>
-                  <option value="thawed">Thawed</option>
-                  <option value="discarded">Discarded</option>
                 </select>
               </label>
               <label>
@@ -686,6 +705,7 @@
               </label>
               <div class="form-actions wide">
                 <button class="primary-button" id="cryoVialSubmitButton" type="submit">Save selected vials</button>
+                <button class="secondary-button" id="thawSelectedVials" type="button">Thaw</button>
                 <button class="secondary-button" id="clearCryoSelection" type="button">Clear selection</button>
                 <button class="icon-button danger-button" id="deleteSelectedVials" type="button" title="Delete selected vials" aria-label="Delete selected vials">&#128465;</button>
               </div>
@@ -1595,15 +1615,21 @@
         <div class="calendar-export-heading">
           <div>
             <p class="eyebrow">Monthly calendar</p>
-            <h2 id="calendarExportTitle">Choose cultures / batches</h2>
-            <p>Only active batches with scheduled activities are shown. The legend will include only batches with activities in each month.</p>
+            <h2 id="calendarExportTitle">One calendar, multiple batches</h2>
+            <p>Select batches from any protocol to combine their tasks in one calendar. Colors identify each batch; crowded weeks continue on the next page.</p>
           </div>
           <button class="icon-button" value="cancel" type="submit" aria-label="Close">&times;</button>
         </div>
+        <div class="calendar-selection-actions">
+          <button class="secondary-button" data-calendar-selection="all" type="button">Select all</button>
+          <button class="secondary-button" data-calendar-selection="none" type="button">Clear selection</button>
+        </div>
         <div id="calendarRunCheckboxes" class="checkbox-grid calendar-run-checkboxes"></div>
+        <label class="checkbox-label calendar-detail-option"><input id="calendarIncludeDetails" type="checkbox"><span>Include media, quantities and notes</span></label>
+        <p class="calendar-export-note">Compact by default: every task is included, grouped by batch and date. Add details for a longer calendar. Only active batches with scheduled activities are listed.</p>
         <div class="form-actions calendar-export-actions">
           <button class="secondary-button" value="cancel" type="submit">Cancel</button>
-          <button class="primary-button" id="confirmCalendarExport" value="default" type="button">Export selected</button>
+          <button class="primary-button" id="confirmCalendarExport" value="default" type="button">Export one calendar</button>
         </div>
       </form>
     </dialog>
@@ -1704,6 +1730,7 @@
     <script src="barcode-scanner.js?v=20260810a"></script>
     <script src="schedule-calendar.js?v=20260809a"></script>
     <script src="shared-library.js?v=20260812b"></script>
+    <script src="culture-panel.js?v=20260913a"></script>
     <script src="app.js?v=20260913a"></script>
     <script src="reagent-inventory.js?v=20260827c"></script>
     <script src="reagent-checklists.js?v=20260827a"></script>

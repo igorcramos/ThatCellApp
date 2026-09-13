@@ -183,13 +183,13 @@
 }
 
 .reagent-mini-metric.is-warning {
-  border-color: #ead0a5;
-  background: #fff8ec;
+  border-color: color-mix(in srgb, var(--warning) 35%, var(--line));
+  background: var(--warning-soft);
 }
 
 .reagent-mini-metric.is-danger {
-  border-color: #e5bbbb;
-  background: #fff2f2;
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
+  background: var(--danger-soft);
 }
 
 .compact-list {
@@ -205,18 +205,18 @@
   padding: 9px 10px;
   border-left: 3px solid var(--warning);
   border-radius: 6px;
-  background: #fff8ec;
+  background: var(--warning-soft);
   font-size: 0.8rem;
 }
 
 .compact-alert.is-danger {
   border-left-color: var(--danger);
-  background: #fff2f2;
+  background: var(--danger-soft);
 }
 
 .compact-alert.is-info {
   border-left-color: var(--blue);
-  background: #f2f6fb;
+  background: color-mix(in srgb, var(--blue) 10%, var(--surface));
 }
 
 .compact-alert span {
@@ -313,7 +313,7 @@
 
 .import-row.is-invalid {
   color: var(--danger);
-  background: #fff2f2;
+  background: var(--danger-soft);
 }
 
 .form-message {
@@ -321,7 +321,7 @@
   padding: 10px;
   border-radius: 6px;
   color: var(--danger);
-  background: #fff2f2;
+  background: var(--danger-soft);
   font-size: 0.84rem;
 }
 
@@ -414,13 +414,13 @@
 }
 
 .reagent-checklist-metric.warning {
-  border-color: #ead0a5;
-  background: #fff8ec;
+  border-color: color-mix(in srgb, var(--warning) 35%, var(--line));
+  background: var(--warning-soft);
 }
 
 .reagent-checklist-metric.danger {
-  border-color: #e5bbbb;
-  background: #fff2f2;
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
+  background: var(--danger-soft);
 }
 
 .reagent-checklist-layout {
@@ -766,4 +766,12 @@
   .reagent-weekly-order {
     justify-content: flex-start;
   }
+}
+
+.reagent-stock-toolbar > *, .reagent-checklist-toolbar > *,
+.reagent-weekly-row > *, .import-card > *, .reagent-weekly-check-meta > * { min-width: 0; }
+.reagent-section-tab { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .reagent-section-tabs { margin-inline: 0; border: 1px solid var(--line); border-radius: 10px; padding: 6px; }
+  .reagent-checklist-toolbar label { min-width: 0; }
 }
