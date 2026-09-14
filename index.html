@@ -900,8 +900,9 @@
             <select name="protocol_id" id="differentiationProtocolSelect" required></select>
           </label>
           <label>
-            Day 0 date
-            <input name="day_zero_date" type="date" required>
+            Start date
+            <input name="start_date" type="date" aria-describedby="protocolStartDateHint" required>
+            <small id="protocolStartDateHint">Aggregation day (Day -1). Day 0 is the following day.</small>
           </label>
           <label>
             Source type

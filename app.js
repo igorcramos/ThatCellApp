@@ -298,6 +298,16 @@ function addDateValueDays(dateValue, days) {
   return date.toISOString().slice(0, 10);
 }
 
+// Keep the stored Day 0 anchor compatible with existing schedules and RPCs.
+// The form's start date is aggregation day (Day -1) for every protocol.
+function protocolDayZeroFromStart(startDate) {
+  return startDate ? addDateValueDays(startDate, 1) : null;
+}
+
+function protocolStartFromDayZero(dayZeroDate) {
+  return dayZeroDate ? addDateValueDays(dayZeroDate, -1) : "";
+}
+
 function protocolDayForDate(dayZeroDate, dateValue) {
   if (!dayZeroDate || !dateValue) return null;
   return Math.round((new Date(`${dateValue}T12:00:00Z`) - new Date(`${dayZeroDate}T12:00:00Z`)) / 86400000);
@@ -1925,7 +1935,7 @@ function renderDifferentiationRuns() {
         localizedProtocolValue(protocol, "name"),
         `Cell lines: ${cellLineIdsForRun(run.id).map((id) => state.cellLines.find((line) => line.id === id)).filter(Boolean).map(cellLineDisplayName).join(", ") || "Not specified"}`,
         differentiationSourceLabel(run),
-        run.day_zero_date ? `Day 0: ${formatDate(run.day_zero_date)}` : null,
+        run.day_zero_date ? `Start date: ${formatDate(protocolStartFromDayZero(run.day_zero_date))}` : null,
         currentDay !== null ? `D${currentDay}` : null,
       ].filter(Boolean);
       const scheduledTasks = state.protocolTasks
@@ -4496,7 +4506,7 @@ async function handleDifferentiationRunSubmit(event) {
     protocol_id_arg: valueOrNull(data.get("protocol_id")),
     run_name_arg: valueOrNull(data.get("run_name")),
     project_arg: valueFromSelectWithCustom(data, "project", "custom_project"),
-    day_zero_date_arg: valueOrNull(data.get("day_zero_date")),
+    day_zero_date_arg: protocolDayZeroFromStart(valueOrNull(data.get("start_date"))),
     source_type_arg: sourceType,
     source_culture_id_arg: sourceType === "culture" ? valueOrNull(data.get("source_culture_id")) : null,
     source_vessel_id_arg: sourceVesselId,
@@ -5623,7 +5633,7 @@ function fillDifferentiationRunForm(run) {
   setFieldValue(form, "run_name", run.run_name);
   setSelectOrCustom(els.runProjectSelect, form.elements.custom_project, run.project || projectForDifferentiationRun(run));
   setFieldValue(form, "protocol_id", run.protocol_id);
-  setFieldValue(form, "day_zero_date", run.day_zero_date);
+  setFieldValue(form, "start_date", protocolStartFromDayZero(run.day_zero_date));
   setFieldValue(form, "source_type", run.source_type || "culture");
   setFieldValue(form, "source_culture_id", run.source_culture_id);
   setFieldValue(form, "source_vessel_id", run.source_vessel_id);
@@ -5650,7 +5660,7 @@ function resetDifferentiationRunForm(options = {}) {
   els.differentiationRunForm.reset();
   delete els.differentiationRunForm.dataset.colorUserSelected;
   els.differentiationRunForm.elements.id.value = "";
-  setDefaultDate(els.differentiationRunForm, "day_zero_date");
+  setDefaultDate(els.differentiationRunForm, "start_date");
   syncDifferentiationBatchColor(nextDifferentiationBatchColor());
   setCheckedValues(els.differentiationWellCheckboxes, []);
   setCheckedValues(els.differentiationVesselCheckboxes, []);
@@ -5836,7 +5846,7 @@ setupMobileMenu();
 setupForms();
 syncConditionalFields();
 setDefaultDate(els.cultureForm, "start_date");
-setDefaultDate(els.differentiationRunForm, "day_zero_date");
+setDefaultDate(els.differentiationRunForm, "start_date");
 els.collectionDate.value = todayValue();
 setDefaultDate(els.eventForm, "event_date");
 setDefaultDate(els.cryoVialForm, "freeze_date");
