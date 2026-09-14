@@ -4488,6 +4488,14 @@ async function handleDifferentiationRunSubmit(event) {
   const selectedWells = sourceType === "wells"
     ? getCheckedValues(els.differentiationWellCheckboxes)
     : [];
+  if (!valueOrNull(data.get("id")) && sourceType === "culture") {
+    showToast("Select a whole plate or specific wells to start a batch.");
+    return;
+  }
+  if ((sourceType === "vessel" && !selectedVesselIds.length) || (sourceType === "wells" && !sourceVesselId)) {
+    showToast("Select at least one source plate.");
+    return;
+  }
   const lineageResolution = differentiationSourceLineageResolution();
   if (lineageResolution.error) {
     showToast(lineageResolution.error);

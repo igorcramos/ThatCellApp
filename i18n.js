@@ -7,6 +7,11 @@
     : (navigator.language || "en").toLowerCase().startsWith("pt") ? "pt" : "en";
 
   const pt = new Map(Object.entries({
+    "Whole plate": "Placa inteira",
+    "Partial plate (selected wells)": "Placa parcial (poços selecionados)",
+    "Wells (when present) → Plate → Culture → Batch (for differentiation). Start by selecting whole plates or part of a plate.": "Poços (quando houver) → Placa → Cultura → Batch (quando há diferenciação). Comece selecionando placas inteiras ou parte de uma placa.",
+    "Start a differentiation batch by selecting whole plates or specific wells.": "Inicie uma leva de diferenciação selecionando placas inteiras ou poços específicos.",
+    "Select a whole plate or specific wells to start a batch.": "Selecione uma placa inteira ou poços específicos para iniciar uma leva.",
     "Language": "Idioma",
     "Export combined calendar": "Exportar calendário conjunto",
     "One calendar, multiple batches": "Um calendário, vários batches",

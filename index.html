@@ -157,16 +157,17 @@
         </div>
         <div class="summary-grid">
           <div class="metric">
+            <span>Plates</span>
+            <strong id="vesselCount">0</strong>
+          </div>
+
+          <div class="metric">
             <span>Cell lines</span>
             <strong id="lineCount">0</strong>
           </div>
           <div class="metric">
             <span>Active cultures</span>
             <strong id="activeCultureCount">0</strong>
-          </div>
-          <div class="metric">
-            <span>Plates</span>
-            <strong id="vesselCount">0</strong>
           </div>
           <div class="metric">
             <span>Cryovials</span>
@@ -872,12 +873,46 @@
         <div class="section-heading">
           <div>
             <h2>Differentiations</h2>
-            <p>Start protocol runs from cultures, plates or subdivided plate portions, and selected wells.</p>
+            <p>Start a differentiation batch by selecting whole plates or specific wells.</p>
           </div>
           <button class="primary-button view-add-button" id="newDifferentiationRunButton" data-open-editor="differentiationRunForm" aria-controls="differentiationRunForm" aria-expanded="false" type="button">New differentiation</button>
         </div>
         <form class="form-grid collapsible-editor is-hidden" id="differentiationRunForm">
           <input name="id" type="hidden">
+          <p class="wide field-help">Wells (when present) → Plate → Culture → Batch (for differentiation). Start by selecting whole plates or part of a plate.</p>
+          <label>
+            Source type
+            <select name="source_type" id="differentiationSourceType">
+              <option value="vessel">Whole plate</option>
+              <option value="wells">Partial plate (selected wells)</option>
+              <option value="culture" hidden disabled>Culture</option>
+            </select>
+          </label>
+          <label id="differentiationCultureLabel" class="is-hidden">
+            Source culture
+            <select name="source_culture_id" id="differentiationCultureSelect"></select>
+          </label>
+          <label id="differentiationVesselLabel" class="is-hidden">
+            Source plate
+            <select name="source_vessel_id" id="differentiationVesselSelect"></select>
+          </label>
+          <div class="wide" id="differentiationVesselsPanel">
+            <div class="field-label">Source plates</div>
+            <div class="checkbox-grid" id="differentiationVesselCheckboxes"></div>
+          </div>
+          <p class="wide" id="differentiationVesselHelp">
+            Select every plate starting this protocol. The plates may contain different cell lines, and the same source plate can also be shared with another protocol.
+          </p>
+          <div class="wide">
+            <div class="field-label">Cell lines inherited from source</div>
+            <div class="lineage-summary" id="differentiationCellLineSummary"></div>
+          </div>
+          <div class="wide is-hidden" id="differentiationWellsPanel">
+            <div class="field-label">Source wells</div>
+            <p>Select the wells for this protocol. For a different purpose, start another protocol with a different selection. Existing runs are shown beside each well.</p>
+            <div class="checkbox-grid" id="differentiationWellCheckboxes"></div>
+          </div>
+
           <label>
             Run name
             <input name="run_name" required placeholder="Example: E3 microglia D0">
@@ -904,38 +939,6 @@
             <input name="start_date" type="date" aria-describedby="protocolStartDateHint" required>
             <small id="protocolStartDateHint">Aggregation day (Day -1). Day 0 is the following day.</small>
           </label>
-          <label>
-            Source type
-            <select name="source_type" id="differentiationSourceType">
-              <option value="culture">Culture</option>
-              <option value="vessel">Plate or subdivided portion</option>
-              <option value="wells">Selected wells</option>
-            </select>
-          </label>
-          <label id="differentiationCultureLabel">
-            Source culture
-            <select name="source_culture_id" id="differentiationCultureSelect"></select>
-          </label>
-          <label id="differentiationVesselLabel" class="is-hidden">
-            Source plate
-            <select name="source_vessel_id" id="differentiationVesselSelect"></select>
-          </label>
-          <div class="wide is-hidden" id="differentiationVesselsPanel">
-            <div class="field-label">Source plates</div>
-            <div class="checkbox-grid" id="differentiationVesselCheckboxes"></div>
-          </div>
-          <p class="wide is-hidden" id="differentiationVesselHelp">
-            Select every plate starting this protocol. The plates may contain different cell lines, and the same source plate can also be shared with another protocol.
-          </p>
-          <div class="wide">
-            <div class="field-label">Cell lines inherited from source</div>
-            <div class="lineage-summary" id="differentiationCellLineSummary"></div>
-          </div>
-          <div class="wide is-hidden" id="differentiationWellsPanel">
-            <div class="field-label">Source wells</div>
-            <p>Select the wells for this protocol. For a different purpose, start another protocol with a different selection. Existing runs are shown beside each well.</p>
-            <div class="checkbox-grid" id="differentiationWellCheckboxes"></div>
-          </div>
           <label>
             Status
             <select name="status">
