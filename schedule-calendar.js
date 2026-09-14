@@ -41,35 +41,12 @@
     });
   }
 
-  // Split crowded weeks into dated continuation rows. The table then paginates
-  // naturally; no fixed-height day can overlap the next week or hide an activity.
-  function buildPrintableWeeks(month, { entrySize = () => 1, maxUnits = 28 } = {}) {
+  // Keep each date whole. The print table can move an entire week to the
+  // next page instead of creating sparse continuation rows for individual days.
+  function buildPrintableWeeks(month) {
     const rows = [];
     for (let offset = 0; offset < month.cells.length; offset += 7) {
-      const week = month.cells.slice(offset, offset + 7);
-      const chunks = week.map((cell) => {
-        if (!cell) return [[]];
-        const parts = [[]];
-        let used = 0;
-        cell.entries.forEach((entry) => {
-          const size = Math.max(1, Number(entrySize(entry)) || 1);
-          if (used && used + size > maxUnits) {
-            parts.push([]);
-            used = 0;
-          }
-          parts.at(-1).push(entry);
-          used += size;
-        });
-        return parts;
-      });
-      const count = Math.max(...chunks.map((parts) => parts.length));
-      for (let part = 0; part < count; part += 1) {
-        rows.push(week.map((cell, index) => cell ? {
-          ...cell,
-          entries: chunks[index][part] || [],
-          continuation: part > 0,
-        } : null));
-      }
+      rows.push(month.cells.slice(offset, offset + 7));
     }
     return rows;
   }

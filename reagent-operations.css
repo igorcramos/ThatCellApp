@@ -775,3 +775,16 @@
   .reagent-section-tabs { margin-inline: 0; border: 1px solid var(--line); border-radius: 10px; padding: 6px; }
   .reagent-checklist-toolbar label { min-width: 0; }
 }
+
+/* Weekly rows live inside a narrow nested panel even on desktop screens. */
+.reagent-weekly-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
+.reagent-weekly-notes { grid-column: 1 / -1; }
+.reagent-weekly-controls { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.reagent-weekly-order { white-space: normal; }
+.reagent-checklist-toolbar { align-items: flex-end; }
+@media (max-width: 760px) {
+  .reagent-weekly-row { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 420px) {
+  .reagent-weekly-controls { grid-template-columns: minmax(0, 1fr); }
+}

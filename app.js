@@ -2104,7 +2104,7 @@ function scheduleTaskHtml(run, item, compact = false) {
   const protocolDayNote = item.protocol_day !== undefined && Number(item.protocol_day) !== Number(item.task_day) ? ` · protocol D${item.protocol_day}` : "";
   const overdue = !completedEvent && dateValueString(item.date) < todayValue();
   return `<article class="schedule-task ${completedEvent ? "is-complete" : ""} ${overdue ? "is-overdue" : ""}" style="--run-color:${escapeHtml(runScheduleColor(run))}">
-    <div class="schedule-task-actions"><button class="task-check" data-toggle-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-activity="${escapeHtml(item.scheduled_activity_index || 0)}" data-task-day="${escapeHtml(item.task_day)}" type="button" aria-label="${completedEvent ? "Mark task incomplete" : "Mark task complete"}" aria-pressed="${completedEvent ? "true" : "false"}"><span aria-hidden="true">${completedEvent ? "✓" : ""}</span><em>${completedEvent ? "Completed" : "Complete"}</em></button>${!completedEvent ? `<button class="task-defer-button" data-defer-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-activity="${escapeHtml(item.scheduled_activity_index || 0)}" data-task-day="${escapeHtml(item.task_day)}" type="button">Defer / shift</button>` : ""}</div>
+    <div class="schedule-task-actions"><button class="task-check" data-toggle-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-activity="${escapeHtml(item.scheduled_activity_index || 0)}" data-task-day="${escapeHtml(item.task_day)}" type="button" aria-label="${completedEvent ? "Mark task incomplete" : "Mark task complete"}">${completedEvent ? "✓ Completed" : "Complete"}</button>${!completedEvent ? `<button class="task-defer-button" data-defer-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-activity="${escapeHtml(item.scheduled_activity_index || 0)}" data-task-day="${escapeHtml(item.task_day)}" type="button">Defer / shift</button>` : ""}</div>
     <div>
       <div class="schedule-task-heading"><strong>${escapeHtml(item.title)}${overdue ? ' <em class="overdue-label">Overdue</em>' : ""}</strong>${compact ? `<span>${escapeHtml(formatDate(dateValueString(item.date)))}</span>` : `<span>${escapeHtml(formatDate(dateValueString(item.date)))} · run D${escapeHtml(item.task_day)}${escapeHtml(protocolDayNote)}</span>`}</div>
       ${detail ? `<p>${escapeHtml(detail)}</p>` : ""}
@@ -4428,7 +4428,7 @@ function printableScheduleDayHtml(cell, options) {
     if (!groups.has(entry.run.id)) groups.set(entry.run.id, { run: entry.run, entries: [] });
     groups.get(entry.run.id).entries.push(entry);
   });
-  return `<td class="print-calendar-day"><time datetime="${escapeHtml(cell.date)}">${cell.day}${cell.continuation ? ` <small>${escapeHtml(printableScheduleText("continued"))}</small>` : ""}</time><div class="print-calendar-events">${[...groups.values()].map(({ run, entries }) => `<section class="print-calendar-batch" style="--run-color:${escapeHtml(runScheduleColor(run))}"><h3>${escapeHtml(run.run_name || differentiationRunLabel(run))}</h3>${entries.map((entry) => printableScheduleEntryHtml(entry, options)).join("")}</section>`).join("")}</div></td>`;
+  return `<td class="print-calendar-day"><time datetime="${escapeHtml(cell.date)}">${cell.day}</time><div class="print-calendar-events">${[...groups.values()].map(({ run, entries }) => `<section class="print-calendar-batch" style="--run-color:${escapeHtml(runScheduleColor(run))}"><h3>${escapeHtml(run.run_name || differentiationRunLabel(run))}</h3>${entries.map((entry) => printableScheduleEntryHtml(entry, options)).join("")}</section>`).join("")}</div></td>`;
 }
 
 function printableScheduleHtml(runs, { includeDetails = false } = {}) {
@@ -4442,11 +4442,7 @@ function printableScheduleHtml(runs, { includeDetails = false } = {}) {
     const monthEntries = month.cells.filter(Boolean).flatMap((cell) => cell.entries);
     const monthRunIds = new Set(monthEntries.map((entry) => entry.run.id));
     const legend = scheduledRuns.filter(({ run }) => monthRunIds.has(run.id)).map(({ run }) => `<span style="--run-color:${escapeHtml(runScheduleColor(run))}"><i></i>${deviationsForRun(run.id).length ? "⚑ " : ""}${escapeHtml(differentiationRunLabel(run))}</span>`).join("");
-    const weeks = window.ScheduleCalendar.buildPrintableWeeks(month, {
-      entrySize: ({ item, run }) => 2 + Math.ceil(String(run.run_name || "").length / 26)
-        + Math.ceil(printableScheduleText(item.title || item.experiment || "Collection").length / 30)
-        + (includeDetails ? Math.ceil(printableScheduleDetail(item).length / 34) : 0),
-    });
+    const weeks = window.ScheduleCalendar.buildPrintableWeeks(month);
     return `<section class="print-month"><table class="print-calendar-table"><thead>
       <tr><th colspan="7" class="print-month-heading"><header class="print-month-header">
         <div><p>${escapeHtml(printableScheduleText("Combined task calendar"))}</p><h1>${escapeHtml(printableScheduleMonthTitle(month.key))}</h1><small>${monthRunIds.size} ${escapeHtml(printableScheduleText("batches"))} · ${monthEntries.length} ${escapeHtml(printableScheduleText("tasks"))} · ${escapeHtml(printableScheduleText("Generated"))} ${escapeHtml(formatDate(todayValue()))}</small></div>

@@ -25,3 +25,19 @@
 @media(max-width:600px) { .culture-board-selection button { flex:1 1 auto; } .culture-board-selection > span { width:100%; } }
 
 .culture-board-color-help { font-size:.75rem; color:var(--muted); margin:8px 0 0; }
+
+/* Card titles and swatches must not inherit full-size text-input geometry. */
+.culture-board-title { align-items: baseline; min-height: 24px; color: var(--text); }
+.culture-board-title input { min-height: 18px; height: 18px; width: 18px; margin: 0; align-self: start; margin-top: 2px; }
+.culture-board-title > strong { min-width: 0; }
+.culture-board-legend-item input[type="color"] { min-height: 24px; height: 24px; align-self: center; }
+.culture-board-toolbar { align-items: flex-end; }
+.culture-board-heading > *, .culture-board-selection > * { min-width: 0; }
+.culture-board-grid { align-items: stretch; }
+.culture-board-card { display: flex; flex-direction: column; }
+.culture-board-card > details { margin-top: auto; }
+.culture-board-tags { padding-bottom: 4px; }
+@media(max-width:600px) {
+  .culture-board-toolbar { gap: 10px; }
+  .culture-board-selection button { white-space: normal; }
+}
