@@ -102,7 +102,7 @@ begin
        expected_duration_days, notes, notes_pt, is_shared, automatic_media_changes)
     values ('Trujillo_200', 'Trujillo_200', '2026-09-13', 'Cortical organoids',
       'Organoides corticais', 90, payload->'protocol'->>'notes',
-      payload->'protocol'->>'notes_pt', true, false)
+      payload->'protocol'->>'notes_pt', true, true)
     returning id into protocol_uuid;
   end if;
   insert into public.differentiation_protocol_tasks

@@ -1993,6 +1993,35 @@ function carriedForwardMedium(tasks, runDay) {
     .sort((a, b) => Number(b.task_day) - Number(a.task_day))[0]?.medium || null;
 }
 
+function isMicrogliaProtocol(protocol) {
+  return /microglia/i.test(`${protocol?.name || ""} ${protocol?.name_pt || ""} ${protocol?.project || ""} ${protocol?.target_cell_type || ""} ${protocol?.target_cell_type_pt || ""}`);
+}
+
+function hpcCollectionTask(allProtocolTasks) {
+  return allProtocolTasks.find((task) => /(?:collect|harvest|coletar|coleta)\b[^\n]*\bhpcs?\b|\bhpcs?\b[^\n]*(?:collect|harvest|coletar|coleta)/i.test(`${task.title || ""} ${task.title_pt || ""}`));
+}
+
+function protocolMediaSchedule(protocol, allProtocolTasks, run) {
+  const protocolName = String(protocol?.name || "").trim().toLowerCase();
+  if (isMicrogliaProtocol(protocol)) {
+    const hpcCollection = hpcCollectionTask(allProtocolTasks);
+    const startDay = adjustedRunDay(run.id, Number(hpcCollection?.task_day ?? 13)) + 1;
+    return { startDay, endDay: Infinity, preferredWeekdays: [2, 5], title: "Microglia medium change" };
+  }
+  if (protocolName.startsWith("trujillo")) {
+    return { startDay: 3, endDay: adjustedRunDay(run.id, 31), preferredWeekdays: [1, 3, 5], title: "Medium change" };
+  }
+  return null;
+}
+
+function isReplacedByAutomaticSchedule(protocol, task, allProtocolTasks) {
+  if (!isMicrogliaProtocol(protocol)) return false;
+  const hpcCollectionDay = Number(hpcCollectionTask(allProtocolTasks)?.task_day ?? 13);
+  return Number(task.task_day) > hpcCollectionDay
+    && /imbm/i.test(`${task.title || ""} ${task.title_pt || ""} ${task.medium || ""}`)
+    && task.task_type === "Factor addition";
+}
+
 // Split explicit activity separators, while preserving medium recipes and doses.
 function protocolActivityTitles(title) {
   return String(title || "").split(/\s+\/\s+|[;\n]+|\s+\+\s+(?=(?:neural induction|indução neural|transfer|transferir|add |adicionar |start |iniciar |collect|coletar|replate|replaquear)\b)/i)
@@ -2044,8 +2073,9 @@ function protocolChecklistActivities(task) {
 
 function buildRunSchedule(run) {
   const allProtocolTasks = state.protocolTasks.filter((task) => task.protocol_id === run.protocol_id);
+  const protocol = state.differentiationProtocols.find((candidate) => candidate.id === run.protocol_id);
   const tasks = allProtocolTasks
-    .filter((task) => hasMeaningfulProtocolValue(task.title))
+    .filter((task) => hasMeaningfulProtocolValue(task.title) && !isReplacedByAutomaticSchedule(protocol, task, allProtocolTasks))
     .flatMap((task) => {
       const protocolDay = Number(task.task_day);
       const runDay = adjustedRunDay(run.id, protocolDay);
@@ -2054,26 +2084,36 @@ function buildRunSchedule(run) {
   const isMediumTask = (task) => hasMeaningfulProtocolValue(task.medium)
     || ["Media change", "Factor addition", "Replating"].includes(task.task_type);
   const explicitMediumDays = new Set(tasks.filter(isMediumTask).map((task) => Number(task.task_day)));
-  const protocol = state.differentiationProtocols.find((protocol) => protocol.id === run.protocol_id);
   const configuredDuration = Number(protocol?.expected_duration_days || 0);
   const importedDuration = Math.max(0, ...allProtocolTasks.map((task) => Number(task.task_day) || 0));
   const hasMaintenancePhase = tasks.some((task) => /maintenance|organoids? formed/i.test(`${task.title || ""} ${task.medium || ""}`));
   const protocolDuration = Math.max(configuredDuration, importedDuration, hasMaintenancePhase ? 90 : 31);
   const duration = adjustedRunDay(run.id, protocolDuration);
   const maintenanceStartDay = adjustedRunDay(run.id, 31);
+  const protocolMediaRule = protocolMediaSchedule(protocol, allProtocolTasks, run);
   const automaticChanges = [];
   for (let day = 3; protocol?.automatic_media_changes !== false && day <= duration; day += 1) {
     const date = addDateValueDays(run.day_zero_date, day);
     const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
     const isMaintenancePhase = day > maintenanceStartDay;
-    const preferredWeekdays = isMaintenancePhase ? [1, 4] : [1, 3, 5];
+    const usesProtocolRule = protocolMediaRule && day >= protocolMediaRule.startDay && day <= protocolMediaRule.endDay;
+    if (protocolMediaRule && !usesProtocolRule && isMicrogliaProtocol(protocol)) continue;
+    const preferredWeekdays = usesProtocolRule ? protocolMediaRule.preferredWeekdays : (isMaintenancePhase ? [1, 4] : [1, 3, 5]);
     const isPreferredDay = preferredWeekdays.includes(weekday);
     const adjacentToExplicitChange = explicitMediumDays.has(day - 1) || explicitMediumDays.has(day + 1);
     const adjacentToAutomaticChange = automaticChanges.some((change) => Math.abs(change.task_day - day) <= 1);
     if (isPreferredDay && !explicitMediumDays.has(day) && !adjacentToExplicitChange && !adjacentToAutomaticChange) {
-      automaticChanges.push({ kind: "automatic", task_day: day, date, title: isMaintenancePhase ? "Maintenance medium change" : "Medium change", medium: carriedForwardMedium(tasks, day) || automaticMediumForRunDay(run, day) });
+      automaticChanges.push({ kind: "automatic", task_day: day, date, title: usesProtocolRule ? protocolMediaRule.title : (isMaintenancePhase ? "Maintenance medium change" : "Medium change"), medium: carriedForwardMedium(tasks, day) || automaticMediumForRunDay(run, day) });
     }
   }
+  deviationsForRun(run.id)
+    .filter((deviation) => !deviation.protocol_task_id && deviation.planned_date && !deviation.performed_date && Number(deviation.day_shift))
+    .forEach((deviation) => {
+      const change = automaticChanges.find((candidate) => dateValueString(candidate.date) === dateValueString(deviation.planned_date));
+      if (!change) return;
+      change.task_day += Number(deviation.day_shift);
+      change.date = addDateValueDays(change.date, Number(deviation.day_shift));
+    });
   const deviations = deviationsForRun(run.id).map((deviation) => {
     const markerDay = adjustedRunDay(run.id, Number(deviation.after_protocol_day)) + 1;
     return {
@@ -2114,7 +2154,7 @@ function scheduleTaskHtml(run, item, compact = false) {
   const protocolDayNote = item.protocol_day !== undefined && Number(item.protocol_day) !== Number(item.task_day) ? ` · protocol D${item.protocol_day}` : "";
   const overdue = !completedEvent && dateValueString(item.date) < todayValue();
   return `<article class="schedule-task ${completedEvent ? "is-complete" : ""} ${overdue ? "is-overdue" : ""}" style="--run-color:${escapeHtml(runScheduleColor(run))}">
-    <div class="schedule-task-actions"><button class="task-check" data-toggle-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-activity="${escapeHtml(item.scheduled_activity_index || 0)}" data-task-day="${escapeHtml(item.task_day)}" type="button" aria-label="${completedEvent ? "Mark task incomplete" : "Mark task complete"}">${completedEvent ? "✓ Completed" : "Complete"}</button>${!completedEvent ? `<button class="task-defer-button" data-defer-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-activity="${escapeHtml(item.scheduled_activity_index || 0)}" data-task-day="${escapeHtml(item.task_day)}" type="button">Defer / shift</button>` : ""}</div>
+    <div class="schedule-task-actions"><button class="task-check" data-toggle-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-activity="${escapeHtml(item.scheduled_activity_index || 0)}" data-task-day="${escapeHtml(item.task_day)}" type="button" aria-label="${completedEvent ? "Mark task incomplete" : "Mark task complete"}">${completedEvent ? "✓ Completed" : "Complete"}</button>${!completedEvent ? `<button class="task-defer-button" data-defer-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-activity="${escapeHtml(item.scheduled_activity_index || 0)}" data-task-day="${escapeHtml(item.task_day)}" type="button">Reschedule</button>` : ""}</div>
     <div>
       <div class="schedule-task-heading"><strong>${escapeHtml(item.title)}${overdue ? ' <em class="overdue-label">Overdue</em>' : ""}</strong>${compact ? `<span>${escapeHtml(formatDate(dateValueString(item.date)))}</span>` : `<span>${escapeHtml(formatDate(dateValueString(item.date)))} · run D${escapeHtml(item.task_day)}${escapeHtml(protocolDayNote)}</span>`}</div>
       ${detail ? `<p>${escapeHtml(detail)}</p>` : ""}
@@ -4291,7 +4331,7 @@ function openTaskDeferral(button) {
   pendingTaskDeferral = { run, item };
   els.deferTaskForm.reset();
   els.deferTaskForm.elements.day_shift.value = "1";
-  els.deferTaskSummary.textContent = `${item.title} is scheduled for ${formatDate(dateValueString(item.date))}. Deferring it will move this task and all later protocol tasks.`;
+  els.deferTaskSummary.textContent = `${item.title} is scheduled for ${formatDate(dateValueString(item.date))}. Use a negative number to move it earlier or a positive number to move it later. This task and all later protocol tasks will move together.`;
   els.deferTaskDialog.showModal();
 }
 
@@ -4301,14 +4341,14 @@ async function handleDeferTaskSubmit(event) {
   const data = new FormData(event.currentTarget);
   const dayShift = numberOrNull(data.get("day_shift"));
   const reason = valueOrNull(data.get("reason"));
-  if (!dayShift || dayShift < 1) return showToast("Enter at least one additional day.");
+  if (!dayShift) return showToast("Enter a non-zero number of days; use a negative number to move the task earlier.");
   if (!reason) return showToast("Enter the reason for the protocol deviation.");
   const { run, item } = pendingTaskDeferral;
   const protocolDay = Number(item.protocol_day ?? item.task_day);
   const payload = {
     differentiation_run_id: run.id,
     protocol_task_id: item.kind === "task" ? item.id : null,
-    deviation_type: "extra_day",
+    deviation_type: dayShift < 0 ? "shortened_phase" : "extra_day",
     after_protocol_day: protocolDay - 1,
     day_shift: dayShift,
     reason,
@@ -4320,7 +4360,8 @@ async function handleDeferTaskSubmit(event) {
   if (error) return showToast(`Error deferring task: ${error.message}`);
   els.deferTaskDialog.close();
   pendingTaskDeferral = null;
-  showToast(`Task deferred by ${dayShift} day${dayShift === 1 ? "" : "s"}; protocol deviation flagged.`);
+  const direction = dayShift < 0 ? "moved earlier" : "moved later";
+  showToast(`Task ${direction} by ${Math.abs(dayShift)} day${Math.abs(dayShift) === 1 ? "" : "s"}; protocol deviation flagged.`);
   await loadAll();
 }
 

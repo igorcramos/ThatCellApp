@@ -15,7 +15,7 @@ seed.tasks.forEach((task, i) => {
   assert.equal(task.medium_pt, explicit[i][3].replaceAll('uM', ' µM'));
 });
 const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
-const protocol = { id: 'p', ...seed.protocol, automatic_media_changes: false };
+const protocol = { id: 'p', ...seed.protocol, automatic_media_changes: true };
 const state = { differentiationProtocols: [protocol], protocolTasks: seed.tasks.map((task, i) => ({ ...task, id: String(i), protocol_id: 'p' })), differentiationEvents: [] };
 let language = 'en';
 const ctx = vm.createContext({ state, window: { getAppLanguage: () => language },
@@ -29,13 +29,18 @@ vm.runInContext(app.slice(app.indexOf('function automaticMediumForDay('), app.in
 for (const lang of ['en', 'pt']) {
   language = lang;
   const schedule = ctx.buildRunSchedule({ id: 'r', protocol_id: 'p', day_zero_date: '2026-09-13' });
-  assert.equal(schedule.filter(item => item.kind === 'automatic').length, 0);
-  assert.deepEqual([...new Set(Array.from(schedule, item => item.task_day))], [0, 1, 2, 3, 4, 11, 18, 25, 32]);
+  const intermediate = schedule.filter(item => item.kind === 'automatic' && item.task_day <= 31);
+  assert.ok(intermediate.length > 0);
+  assert.ok(intermediate.every(item => [1, 3, 5].includes(new Date(`${item.date}T12:00:00Z`).getUTCDay())));
+  [[4, 11], [11, 18], [18, 25], [25, 32]].forEach(([start, end]) => {
+    assert.ok(intermediate.some(item => item.task_day > start && item.task_day < end), `medium ${start}–${end} has an intermediate change`);
+  });
   assert.equal(schedule.filter(item => item.task_day === 4).length, 2);
   assert.equal(schedule.filter(item => item.task_day === 11).length, 2);
 }
-delete protocol.automatic_media_changes;
-assert.ok(ctx.buildRunSchedule({ id: 'r', protocol_id: 'p', day_zero_date: '2026-09-13' }).some(item => item.kind === 'automatic'));
+protocol.automatic_media_changes = false;
+assert.equal(ctx.buildRunSchedule({ id: 'r', protocol_id: 'p', day_zero_date: '2026-09-13' }).filter(item => item.kind === 'automatic').length, 0);
 assert.match(sql, /source\.automatic_media_changes/);
+assert.match(sql, /true, true\)/);
 assert.match(sql, /task\.title_pt/);
-console.log('Trujillo_200: CSV fidelity, bilingual checklist, explicit agenda and legacy scheduling passed.');
+console.log('Trujillo_200: CSV fidelity, bilingual checklist and intermediate M/W/F changes passed.');

@@ -1681,14 +1681,15 @@
         <div class="calendar-export-heading">
           <div>
             <p class="eyebrow">Protocol adjustment</p>
-            <h2 id="deferTaskTitle">Defer task</h2>
+            <h2 id="deferTaskTitle">Reschedule task</h2>
             <p id="deferTaskSummary"></p>
           </div>
           <button class="icon-button" data-close-defer-dialog type="button" aria-label="Close">&times;</button>
         </div>
         <label>
-          Additional days
-          <input name="day_shift" type="number" min="1" max="30" step="1" value="1" required>
+          Schedule shift (days)
+          <input name="day_shift" type="number" min="-30" max="30" step="1" value="1" required>
+          <small>Negative anticipates the task; positive postpones it.</small>
         </label>
         <label>
           Reason for deviation
@@ -1700,7 +1701,7 @@
         </label>
         <div class="form-actions calendar-export-actions">
           <button class="secondary-button" data-close-defer-dialog type="button">Cancel</button>
-          <button class="primary-button" type="submit">Defer &amp; shift schedule</button>
+          <button class="primary-button" type="submit">Reschedule</button>
         </div>
       </form>
     </dialog>
