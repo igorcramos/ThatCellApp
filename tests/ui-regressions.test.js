@@ -93,6 +93,7 @@ assert.match(appCss, /@media \(max-width: 760px\)[\s\S]*?\.schedule-task\s*\{[^}
 
 const reagentOperations = read("reagent-operations.js");
 const reagentInventory = read("reagent-inventory.js");
+const cultureMedia = read("culture-media.js");
 assert.match(reagentOperations, /scannerRequestId:\s*0/);
 assert.match(reagentOperations, /requestId !== reagentOpsState\.scannerRequestId/);
 assert.match(reagentOperations, /stream\?\.getTracks\?\.\(\)\.forEach\(\(track\) => track\.stop\(\)\)/);
@@ -159,5 +160,10 @@ assert.match(reagentOperations, /setReagentSection\("stock"\)/, "scanner matches
 assert.match(reagentOperations, /setReagentSection\("catalog"\)/, "unknown scanner matches must open the reagent catalog");
 assert.match(reagentInventory, /function setReagentFormOpen\(open, \{ scroll = true \} = \{\}\)/, "reagent editor visibility must be controlled centrally");
 assert.match(reagentInventory, /function editReagentItem[\s\S]*openReagentForm\(\);/, "editing a reagent must reveal the editor");
+assert.match(reagentInventory, /aria-autocomplete[^\n]*list/, "reagent library search must expose combobox autocomplete semantics");
+assert.match(reagentInventory, /\["ArrowDown", "ArrowUp", "Enter", "Escape"\]/, "reagent library search must support keyboard navigation");
+assert.match(reagentInventory, /loadReagentInventory\(\{ catalog: false, items: false \}\)/, "saving an aliquot must not reload catalog and stock tables");
+assert.doesNotMatch(cultureMedia, /addEventListener\("reagents:loaded", loadCultureMedia\)/, "reagent changes must not reload unrelated culture media recipes");
+assert.doesNotMatch(cultureMedia, /setTimeout\(loadCultureMedia/, "culture media must not perform a delayed duplicate initial load");
 
 console.log("UI regressions: translations, responsive layout, and scanner cancellation passed");

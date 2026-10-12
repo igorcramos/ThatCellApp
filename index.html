@@ -907,6 +907,11 @@
             <div class="field-label">Cell lines inherited from source</div>
             <div class="lineage-summary" id="differentiationCellLineSummary"></div>
           </div>
+          <fieldset class="wide lineage-plate-plan">
+            <legend>Plates for each cell line</legend>
+            <p class="field-help">Choose the quantity and plate type independently for every lineage in this batch. The plan stays attached to the batch.</p>
+            <div id="differentiationPlatePlan"></div>
+          </fieldset>
           <div class="wide is-hidden" id="differentiationWellsPanel">
             <div class="field-label">Source wells</div>
             <p>Select the wells for this protocol. For a different purpose, start another protocol with a different selection. Existing runs are shown beside each well.</p>
@@ -934,10 +939,18 @@
             Protocol
             <select name="protocol_id" id="differentiationProtocolSelect" required></select>
           </label>
+          <label id="trujilloMediaCadenceLabel" class="is-hidden">
+            Medium-change cadence
+            <select name="media_cadence">
+              <option value="preferred">Preferred · Monday, Wednesday, Friday</option>
+              <option value="alternative">Alternative · Tuesday, Thursday, Sunday</option>
+            </select>
+            <small>Used by protocols with automatic medium changes. Individual activities can still be dragged when needed.</small>
+          </label>
           <label>
             Start date
             <input name="start_date" type="date" aria-describedby="protocolStartDateHint" required>
-            <small id="protocolStartDateHint">Aggregation day (Day -1). Day 0 is the following day.</small>
+            <small id="protocolStartDateHint">Day 0 — the first manipulation in this protocol (for example, aggregation).</small>
           </label>
           <label>
             Status
@@ -989,6 +1002,7 @@
               <button class="secondary-button" id="printRunSchedule" type="button">Export calendar</button>
             </div>
           </div>
+          <p class="field-help">Drag any unfinished activity onto another activity date to move it; all later protocol activities will shift by the same amount.</p>
           <details class="protocol-deviation-panel">
             <summary><span><strong>Protocol adjustments</strong><small>Document extra days, shortened phases, or other run-specific deviations.</small></span></summary>
             <div class="protocol-deviation-content">
@@ -1382,6 +1396,7 @@
             <div class="wide media-form-heading"><span class="media-step-badge">Step 1</span><div><h3>Recipe details</h3><p>Create the recipe once, then add all components without leaving the form.</p></div></div>
             <label>Recipe name<input name="name" required placeholder="Example: Neural induction medium"></label>
             <label>Version<input name="version" required value="1.0" placeholder="Example: 1.0"></label>
+            <label class="wide">Protocol<select name="protocol_id" id="mediaProtocolSelect" required></select><small class="field-help">Every medium belongs to one protocol, so recipes are shown in separate protocol groups.</small></label>
             <label class="wide">Base / solvent<input name="solvent_name" required placeholder="Example: DMEM/F12 or sterile water"></label>
             <label class="wide">Description<textarea name="description" rows="2" placeholder="Purpose or protocol reference"></textarea></label>
             <label class="wide">Notes<textarea name="notes" rows="2" placeholder="Preparation, filtration, or storage notes"></textarea></label>

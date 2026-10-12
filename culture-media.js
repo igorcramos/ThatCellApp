@@ -13,6 +13,7 @@ const cultureMediaEls = {
   editRecipe: document.querySelector("#editMediaRecipe"),
   deleteRecipe: document.querySelector("#deleteMediaRecipe"),
   recipeForm: document.querySelector("#mediaRecipeForm"),
+  protocolSelect: document.querySelector("#mediaProtocolSelect"),
   cancelRecipe: document.querySelector("#cancelMediaRecipeEdit"),
   recipeSummary: document.querySelector("#mediaRecipeSummary"),
   newComponent: document.querySelector("#newMediaComponent"),
@@ -274,7 +275,9 @@ function renderCultureMediaRecipeSummary() {
     return;
   }
   const activeComponents = selectedCultureMediaComponents(false).length;
+  const protocol = state.differentiationProtocols.find((entry) => entry.id === recipe.protocol_id);
   cultureMediaEls.recipeSummary.innerHTML = `
+    <div class="media-summary-card"><span>${escapeHtml(cultureMediaTranslate("Protocol"))}</span><strong>${escapeHtml(protocol ? localizedProtocolValue(protocol, "name") : "General / unassigned")}</strong></div>
     <div class="media-summary-card"><span>${escapeHtml(cultureMediaTranslate("Version"))}</span><strong>${escapeHtml(recipe.version)}</strong></div>
     <div class="media-summary-card"><span>${escapeHtml(cultureMediaTranslate("Base / solvent"))}</span><strong>${escapeHtml(recipe.solvent_name)}</strong></div>
     <div class="media-summary-card"><span>${escapeHtml(cultureMediaTranslate("Active components"))}</span><strong>${activeComponents}</strong></div>
@@ -354,8 +357,10 @@ function renderCultureMediaCalculation() {
 function renderCultureMedia() {
   if (!cultureMediaEls.recipeSelect) return;
   const recipe = selectedCultureMediaRecipe();
+  const protocolName = (id) => state.differentiationProtocols.find((protocol) => protocol.id === id)?.name || "General / unassigned";
+  const groupedRecipes = Map.groupBy ? Map.groupBy(cultureMediaState.recipes, (entry) => entry.protocol_id || "") : cultureMediaState.recipes.reduce((groups, entry) => groups.set(entry.protocol_id || "", [...(groups.get(entry.protocol_id || "") || []), entry]), new Map());
   cultureMediaEls.recipeSelect.innerHTML = cultureMediaState.recipes.length
-    ? cultureMediaState.recipes.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(`${entry.name} · v${entry.version}`)}</option>`).join("")
+    ? [...groupedRecipes.entries()].sort((a, b) => protocolName(a[0]).localeCompare(protocolName(b[0]))).map(([protocolId, recipes]) => `<optgroup label="${escapeHtml(protocolName(protocolId))}">${recipes.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(`${entry.name} · v${entry.version}`)}</option>`).join("")}</optgroup>`).join("")
     : `<option value="">${escapeHtml(cultureMediaTranslate("No culture media recipes"))}</option>`;
   cultureMediaEls.recipeSelect.value = recipe?.id || "";
   [cultureMediaEls.editRecipe, cultureMediaEls.duplicateRecipe, cultureMediaEls.deleteRecipe, cultureMediaEls.newComponent].forEach((button) => {
@@ -410,6 +415,8 @@ function openCultureMediaRecipeForm(recipe = null) {
   form.elements.id.value = recipe?.id || "";
   form.elements.name.value = recipe?.name || "";
   form.elements.version.value = recipe?.version || "1.0";
+  cultureMediaEls.protocolSelect.innerHTML = `<option value="">Select protocol</option>${state.differentiationProtocols.map((protocol) => `<option value="${escapeHtml(protocol.id)}">${escapeHtml(localizedProtocolValue(protocol, "name"))}</option>`).join("")}`;
+  form.elements.protocol_id.value = recipe?.protocol_id || "";
   form.elements.solvent_name.value = recipe?.solvent_name || "Base medium / solvent";
   form.elements.description.value = recipe?.description || "";
   form.elements.notes.value = recipe?.notes || "";
@@ -430,14 +437,15 @@ async function handleCultureMediaRecipeSubmit(event) {
   const id = valueOrNull(data.get("id"));
   const payload = {
     name: String(data.get("name") || "").trim(),
+    protocol_id: valueOrNull(data.get("protocol_id")),
     version: String(data.get("version") || "1.0").trim(),
     solvent_name: String(data.get("solvent_name") || "").trim(),
     description: valueOrNull(data.get("description")),
     notes: valueOrNull(data.get("notes")),
     is_active: data.get("is_active") === "on",
   };
-  if (!payload.name || !payload.version || !payload.solvent_name) {
-    showToast(cultureMediaTranslate("Name, version, and base / solvent are required."));
+  if (!payload.name || !payload.protocol_id || !payload.version || !payload.solvent_name) {
+    showToast(cultureMediaTranslate("Protocol, name, version, and base / solvent are required."));
     return;
   }
   if (!id) payload.created_by = currentUserId();
@@ -468,6 +476,7 @@ async function duplicateSelectedCultureMediaRecipe() {
   cultureMediaEls.duplicateRecipe.disabled = true;
   const recipePayload = {
     name: `${recipe.name} copy`,
+    protocol_id: recipe.protocol_id,
     version: recipe.version,
     solvent_name: recipe.solvent_name,
     description: recipe.description,
@@ -701,7 +710,6 @@ cultureMediaEls.componentList?.addEventListener("click", (event) => {
 cultureMediaEls.targetVolume?.addEventListener("input", renderCultureMediaCalculation);
 cultureMediaEls.targetVolumeUnit?.addEventListener("change", renderCultureMediaCalculation);
 window.addEventListener("app:languagechange", renderCultureMedia);
-document.addEventListener("reagents:loaded", loadCultureMedia);
 
 window.CultureMediaCalculator = Object.freeze({
   calculateComponent: calculateCultureMediaComponent,
@@ -712,4 +720,3 @@ window.CultureMediaCalculator = Object.freeze({
 
 renderCultureMedia();
 loadCultureMedia();
-window.setTimeout(loadCultureMedia, 1200);

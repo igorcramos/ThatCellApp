@@ -784,6 +784,18 @@
 .reagent-checklist-toolbar { align-items: flex-end; }
 @media (max-width: 760px) {
   .reagent-weekly-row { grid-template-columns: minmax(0, 1fr); }
+  .compact-field,
+  .reagent-mini-metric span,
+  .reagent-checklist-metric span,
+  .reagent-weekly-item span,
+  .reagent-weekly-row label,
+  .reagent-weekly-notes summary { font-size: .8rem; }
+  .compact-field input,
+  .purchase-actions input,
+  .receipt-fields input,
+  .purchase-action-button,
+  .reagent-weekly-row input,
+  .reagent-weekly-row .checkbox-label { min-height: var(--touch-target); }
 }
 @media (max-width: 420px) {
   .reagent-weekly-controls { grid-template-columns: minmax(0, 1fr); }

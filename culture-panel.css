@@ -40,4 +40,16 @@
 @media(max-width:600px) {
   .culture-board-toolbar { gap: 10px; }
   .culture-board-selection button { white-space: normal; }
+  .culture-board-heading p,
+  .culture-board-selection,
+  .culture-board-legend-item,
+  .culture-board-subtitle,
+  .culture-board-tags span,
+  .culture-board-card summary,
+  .culture-board-details,
+  .culture-board-color-help { font-size: .8rem; }
+  .culture-board-title { min-height: var(--touch-target); align-items: center; }
+  .culture-board-title input { width: 20px; height: 20px; min-height: 20px; }
+  .culture-board-legend-item { min-height: var(--touch-target); padding-block: 8px; }
+  .culture-board-legend-item input[type="color"] { width: 32px; height: 32px; min-height: 32px; }
 }

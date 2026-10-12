@@ -66,7 +66,23 @@ Simple web app for cell culture tracking using Supabase.
 
 21. Run `supabase/2026-09-13_trujillo_200.sql` and deploy the updated `app.js`
     to add the bilingual shared `Trujillo_200` protocol (nine explicit stages,
-    D0–D90), without inferred medium changes. See `docs/protocols/Trujillo_200.md`.
+    D0–D90), with intermediate medium changes through D31. See
+    `docs/protocols/Trujillo_200.md`.
+
+22. Run `supabase/2026-09-14_protocol_centrifugation_details.sql` after the
+    protocol seeds to add bilingual aggregation notes: AggreWell uses 100 g
+    for 3 min; Trujillo_200 uses 300 g for 1 min with brake. This repeatable
+    update preserves existing notes and adds no tasks or checklist activities.
+
+23. Run `supabase/2026-09-28_protocol_media_schedules.sql` and deploy the
+    updated `app.js` to schedule Trujillo medium changes between weekly phase
+    transitions and prioritize Tuesday/Friday changes after HPC collection in
+    Microglia runs.
+
+24. Run `supabase/2026-10-13_atomic_relationship_sync.sql` after the shared
+    culture responsibility migration. It replaces culture cell-line links in a
+    single transaction, preventing partially cleared lineage assignments when
+    a request fails midway through an update.
 
 ## Login options
 

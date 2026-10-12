@@ -6,6 +6,8 @@ const reagentOpsState = {
   scannerBusy: false,
   scannerDecoder: null,
   scannerRequestId: 0,
+  purchaseLoading: null,
+  purchaseLoaded: false,
 };
 
 const reagentOpsEls = {
@@ -496,7 +498,7 @@ async function handleCatalogSubmit(event) {
   }
   event.currentTarget.reset();
   showToast("Catalog product added.");
-  await loadReagentInventory();
+  await loadReagentInventory({ aliquots: false });
 }
 
 function parseCsv(text) {
@@ -612,7 +614,7 @@ async function importCatalogRows() {
   reagentOpsEls.importConfirm.classList.add("is-hidden");
   reagentOpsEls.importStatus.textContent = `Imported ${imported} catalog rows successfully.`;
   showToast("Catalog import complete.");
-  await loadReagentInventory();
+  await loadReagentInventory({ aliquots: false });
 }
 
 function purchaseStatusBadge(status) {
@@ -638,7 +640,10 @@ function renderPurchaseRequests() {
 }
 
 async function loadPurchaseRequests() {
-  const { data, error } = await db.from("reagent_purchase_requests").select("*, reagent_catalog(*)").order("created_at", { ascending: false });
+  if (reagentOpsState.purchaseLoading) return reagentOpsState.purchaseLoading;
+  reagentOpsState.purchaseLoading = Promise.resolve(db.from("reagent_purchase_requests").select("*, reagent_catalog(*)").order("created_at", { ascending: false }));
+  const { data, error } = await reagentOpsState.purchaseLoading.finally(() => { reagentOpsState.purchaseLoading = null; });
+  reagentOpsState.purchaseLoaded = true;
   if (error) {
     reagentOpsState.purchaseRequests = [];
     reagentOpsEls.purchaseList.innerHTML = `<div class="empty-state">Purchasing is unavailable. Run <code>2026-08-05_reagent_operations.sql</code> and sign in.<br>${escapeHtml(error.message)}</div>`;
@@ -724,7 +729,7 @@ async function handlePurchaseAction(event) {
     });
     if (error) { showToast(`Could not receive item: ${error.message}`); button.disabled = false; return; }
     showToast("Purchase received into stock.");
-    await Promise.all([loadPurchaseRequests(), loadReagentInventory()]);
+    await Promise.all([loadPurchaseRequests(), loadReagentInventory({ catalog: false, aliquots: false })]);
   }
   button.disabled = false;
 }
@@ -737,11 +742,12 @@ async function fillRequesterFromSession() {
   input.value = user?.user_metadata?.full_name || user?.email || "";
 }
 
-function handleReagentsLoaded() {
-  renderReagentAlerts();
-  renderReagentQuality();
-  populatePurchaseCatalog();
-  loadPurchaseRequests();
+function handleReagentsLoaded(event) {
+  const changed = event?.detail || { catalog: true, items: true, aliquots: true };
+  if (changed.items || changed.aliquots) renderReagentAlerts();
+  if (changed.catalog || changed.items) renderReagentQuality();
+  if (changed.catalog) populatePurchaseCatalog();
+  if (!reagentOpsState.purchaseLoaded) loadPurchaseRequests();
   fillRequesterFromSession();
 }
 
@@ -792,9 +798,10 @@ if (db?.auth?.onAuthStateChange) {
         reagentState.items = [];
         reagentState.aliquots = [];
         reagentOpsState.purchaseRequests = [];
+        reagentOpsState.purchaseLoaded = false;
       }
     }, 0);
   });
 }
 
-if (reagentState.catalog.length) handleReagentsLoaded();
+if (reagentState.catalog.length) handleReagentsLoaded({ detail: { catalog: true, items: true, aliquots: true } });

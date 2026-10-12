@@ -65,6 +65,7 @@ const statusClass = {
 const defaultProjects = ["TBCK", "APOE-TAU"];
 const defaultLabs = ["Victor Lab", "Rita Lab"];
 const AUTH_PENDING_LAB_KEY = "thatcellapp.pendingLabName";
+const ACTIVE_VIEW_KEY = "thatcellapp.activeView";
 
 const projectColors = {
   TBCK: "#176f64",
@@ -116,6 +117,8 @@ const els = {
   differentiationCustomColor: document.querySelector("#differentiationCustomColor"),
   differentiationColorPreview: document.querySelector("#differentiationColorPreview"),
   differentiationColorPreviewName: document.querySelector("#differentiationColorPreviewName"),
+  differentiationPlatePlan: document.querySelector("#differentiationPlatePlan"),
+  trujilloMediaCadenceLabel: document.querySelector("#trujilloMediaCadenceLabel"),
   collectionForm: document.querySelector("#collectionForm"),
   eventForm: document.querySelector("#eventForm"),
   cellLinesList: document.querySelector("#cellLinesList"),
@@ -277,6 +280,8 @@ const els = {
 
 let pendingOffScheduleCompletion = null;
 let pendingTaskDeferral = null;
+let toastHideTimer = null;
+const dirtyForms = new WeakSet();
 
 function valueOrNull(value) {
   const trimmed = typeof value === "string" ? value.trim() : value;
@@ -298,14 +303,14 @@ function addDateValueDays(dateValue, days) {
   return date.toISOString().slice(0, 10);
 }
 
-// Keep the stored Day 0 anchor compatible with existing schedules and RPCs.
-// The form's start date is aggregation day (Day -1) for every protocol.
+// Day 0 is always the first manipulation in the protocol (for example,
+// aggregation). Older records keep their stored anchor unchanged.
 function protocolDayZeroFromStart(startDate) {
-  return startDate ? addDateValueDays(startDate, 1) : null;
+  return startDate || null;
 }
 
 function protocolStartFromDayZero(dayZeroDate) {
-  return dayZeroDate ? addDateValueDays(dayZeroDate, -1) : "";
+  return dayZeroDate || "";
 }
 
 function protocolDayForDate(dayZeroDate, dateValue) {
@@ -583,9 +588,14 @@ function projectBadge(project) {
 }
 
 function showToast(message) {
+  if (!els.toast) return;
+  if (toastHideTimer !== null) window.clearTimeout(toastHideTimer);
   els.toast.textContent = message;
   els.toast.classList.add("is-visible");
-  window.setTimeout(() => els.toast.classList.remove("is-visible"), 3200);
+  toastHideTimer = window.setTimeout(() => {
+    els.toast.classList.remove("is-visible");
+    toastHideTimer = null;
+  }, 3200);
 }
 
 function setStatus(kind, label) {
@@ -1930,11 +1940,15 @@ function renderDifferentiationRuns() {
       const protocol = state.differentiationProtocols.find((item) => item.id === run.protocol_id);
       const batchColor = runScheduleColor(run);
       const currentDay = daysSince(run.day_zero_date);
+      const platePlanText = Array.isArray(run.plate_plan) && run.plate_plan.length
+        ? `Plate plan: ${run.plate_plan.map((entry) => `${state.cellLines.find((line) => line.id === entry.cell_line_id)?.identifier || "line"} · ${entry.quantity} × ${entry.plate_type}`).join("; ")}`
+        : null;
       const meta = [
         projectForDifferentiationRun(run),
         localizedProtocolValue(protocol, "name"),
         `Cell lines: ${cellLineIdsForRun(run.id).map((id) => state.cellLines.find((line) => line.id === id)).filter(Boolean).map(cellLineDisplayName).join(", ") || "Not specified"}`,
         differentiationSourceLabel(run),
+        platePlanText,
         run.day_zero_date ? `Start date: ${formatDate(protocolStartFromDayZero(run.day_zero_date))}` : null,
         currentDay !== null ? `D${currentDay}` : null,
       ].filter(Boolean);
@@ -1997,6 +2011,13 @@ function isMicrogliaProtocol(protocol) {
   return /microglia/i.test(`${protocol?.name || ""} ${protocol?.name_pt || ""} ${protocol?.project || ""} ${protocol?.target_cell_type || ""} ${protocol?.target_cell_type_pt || ""}`);
 }
 
+function isTrujilloOrganoidProtocol(protocol) {
+  const description = `${protocol?.name || ""} ${protocol?.name_pt || ""} ${protocol?.target_cell_type || ""} ${protocol?.target_cell_type_pt || ""}`;
+  return /trujillo/i.test(description)
+    && !/microglia/i.test(description)
+    && (/organoid|organoide/i.test(description) || /trujillo[^\n]*(?:200|agg)/i.test(description));
+}
+
 function hpcCollectionTask(allProtocolTasks) {
   return allProtocolTasks.find((task) => /(?:collect|harvest|coletar|coleta)\b[^\n]*\bhpcs?\b|\bhpcs?\b[^\n]*(?:collect|harvest|coletar|coleta)/i.test(`${task.title || ""} ${task.title_pt || ""}`));
 }
@@ -2006,10 +2027,21 @@ function protocolMediaSchedule(protocol, allProtocolTasks, run) {
   if (isMicrogliaProtocol(protocol)) {
     const hpcCollection = hpcCollectionTask(allProtocolTasks);
     const startDay = adjustedRunDay(run.id, Number(hpcCollection?.task_day ?? 13)) + 1;
-    return { startDay, endDay: Infinity, preferredWeekdays: [2, 5], title: "Microglia medium change" };
+    const mediumTask = allProtocolTasks.find((task) => /imbm/i.test(`${task.medium || ""} ${task.medium_pt || ""}`));
+    const titledMediumTask = allProtocolTasks.find((task) => /imbm/i.test(`${task.title || ""} ${task.title_pt || ""}`));
+    const microgliaMedium = mediumTask?.medium || mediumTask?.medium_pt || titledMediumTask?.title || titledMediumTask?.title_pt || null;
+    return { startDay, endDay: Infinity, preferredWeekdays: [2, 5], title: "Microglia medium change", medium: microgliaMedium };
   }
-  if (protocolName.startsWith("trujillo")) {
-    return { startDay: 3, endDay: adjustedRunDay(run.id, 31), preferredWeekdays: [1, 3, 5], title: "Medium change" };
+  if (isTrujilloOrganoidProtocol(protocol)) {
+    // Phase starts are D4, D11, D18 and D25. Between them the same medium is
+    // changed Monday/Wednesday/Friday, avoiding consecutive-day changes.
+    const alternativeCadence = run.schedule_preferences?.media_cadence === "alternative";
+    return {
+      startDay: adjustedRunDay(run.id, 4),
+      endDay: adjustedRunDay(run.id, 31),
+      preferredWeekdays: alternativeCadence ? [0, 2, 4] : [1, 3, 5],
+      title: "Medium change",
+    };
   }
   return null;
 }
@@ -2017,9 +2049,11 @@ function protocolMediaSchedule(protocol, allProtocolTasks, run) {
 function isReplacedByAutomaticSchedule(protocol, task, allProtocolTasks) {
   if (!isMicrogliaProtocol(protocol)) return false;
   const hpcCollectionDay = Number(hpcCollectionTask(allProtocolTasks)?.task_day ?? 13);
-  return Number(task.task_day) > hpcCollectionDay
+  const text = `${task.title || ""} ${task.title_pt || ""} ${task.medium || ""} ${task.medium_pt || ""}`;
+  const isTrujilloMedium = /\b(?:medium|meio)\s*[123]\b/i.test(text);
+  return isTrujilloMedium || (Number(task.task_day) > hpcCollectionDay
     && /imbm/i.test(`${task.title || ""} ${task.title_pt || ""} ${task.medium || ""}`)
-    && task.task_type === "Factor addition";
+    && task.task_type === "Factor addition");
 }
 
 // Split explicit activity separators, while preserving medium recipes and doses.
@@ -2100,10 +2134,20 @@ function buildRunSchedule(run) {
     if (protocolMediaRule && !usesProtocolRule && isMicrogliaProtocol(protocol)) continue;
     const preferredWeekdays = usesProtocolRule ? protocolMediaRule.preferredWeekdays : (isMaintenancePhase ? [1, 4] : [1, 3, 5]);
     const isPreferredDay = preferredWeekdays.includes(weekday);
+    const latestChangeDay = Math.max(-Infinity,
+      ...[...explicitMediumDays].filter((changeDay) => changeDay < day),
+      ...automaticChanges.map((change) => change.task_day).filter((changeDay) => changeDay < day));
+    const needsSafetyChange = usesProtocolRule
+      && isTrujilloOrganoidProtocol(protocol)
+      && Number.isFinite(latestChangeDay)
+      && day - latestChangeDay >= 3;
     const adjacentToExplicitChange = explicitMediumDays.has(day - 1) || explicitMediumDays.has(day + 1);
     const adjacentToAutomaticChange = automaticChanges.some((change) => Math.abs(change.task_day - day) <= 1);
-    if (isPreferredDay && !explicitMediumDays.has(day) && !adjacentToExplicitChange && !adjacentToAutomaticChange) {
-      automaticChanges.push({ kind: "automatic", task_day: day, date, title: usesProtocolRule ? protocolMediaRule.title : (isMaintenancePhase ? "Maintenance medium change" : "Medium change"), medium: carriedForwardMedium(tasks, day) || automaticMediumForRunDay(run, day) });
+    if ((isPreferredDay || needsSafetyChange) && !explicitMediumDays.has(day) && !adjacentToExplicitChange && !adjacentToAutomaticChange) {
+      const medium = (isMicrogliaProtocol(protocol) ? protocolMediaRule?.medium : carriedForwardMedium(tasks, day))
+        || carriedForwardMedium(tasks, day)
+        || (isTrujilloOrganoidProtocol(protocol) ? automaticMediumForRunDay(run, day) : null);
+      automaticChanges.push({ kind: "automatic", task_day: day, date, title: usesProtocolRule ? protocolMediaRule.title : (isMaintenancePhase ? "Maintenance medium change" : "Medium change"), medium });
     }
   }
   deviationsForRun(run.id)
@@ -2153,7 +2197,7 @@ function scheduleTaskHtml(run, item, compact = false) {
   const detail = [...new Set([item.medium, item.notes].filter(hasMeaningfulProtocolValue))].join(" · ");
   const protocolDayNote = item.protocol_day !== undefined && Number(item.protocol_day) !== Number(item.task_day) ? ` · protocol D${item.protocol_day}` : "";
   const overdue = !completedEvent && dateValueString(item.date) < todayValue();
-  return `<article class="schedule-task ${completedEvent ? "is-complete" : ""} ${overdue ? "is-overdue" : ""}" style="--run-color:${escapeHtml(runScheduleColor(run))}">
+  return `<article class="schedule-task ${completedEvent ? "is-complete" : ""} ${overdue ? "is-overdue" : ""}" style="--run-color:${escapeHtml(runScheduleColor(run))}" data-calendar-date="${escapeHtml(dateValueString(item.date))}" ${!compact && !completedEvent ? `draggable="true" data-drag-run="${escapeHtml(run.id)}" data-drag-kind="${escapeHtml(item.kind)}" data-drag-id="${escapeHtml(item.id || "")}" data-drag-activity="${escapeHtml(item.scheduled_activity_index || 0)}" data-drag-day="${escapeHtml(item.task_day)}" data-drag-date="${escapeHtml(dateValueString(item.date))}"` : ""}>
     <div class="schedule-task-actions"><button class="task-check" data-toggle-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-activity="${escapeHtml(item.scheduled_activity_index || 0)}" data-task-day="${escapeHtml(item.task_day)}" type="button" aria-label="${completedEvent ? "Mark task incomplete" : "Mark task complete"}">${completedEvent ? "✓ Completed" : "Complete"}</button>${!completedEvent ? `<button class="task-defer-button" data-defer-schedule-task="${escapeHtml(run.id)}" data-task-kind="${escapeHtml(item.kind)}" data-task-id="${escapeHtml(item.id || "")}" data-task-activity="${escapeHtml(item.scheduled_activity_index || 0)}" data-task-day="${escapeHtml(item.task_day)}" type="button">Reschedule</button>` : ""}</div>
     <div>
       <div class="schedule-task-heading"><strong>${escapeHtml(item.title)}${overdue ? ' <em class="overdue-label">Overdue</em>' : ""}</strong>${compact ? `<span>${escapeHtml(formatDate(dateValueString(item.date)))}</span>` : `<span>${escapeHtml(formatDate(dateValueString(item.date)))} · run D${escapeHtml(item.task_day)}${escapeHtml(protocolDayNote)}</span>`}</div>
@@ -2210,7 +2254,7 @@ function renderRunSchedule() {
   const today = todayValue();
   const schedule = buildRunSchedule(run);
   renderRunDeviationSummary(run);
-  els.runSchedule.innerHTML = schedule.map((item) => {
+  const scheduleItem = (item) => {
     if (item.kind === "task" || item.kind === "automatic") return scheduleTaskHtml(run, item);
     const itemDate = dateValueString(item.date);
     const stateClass = itemDate === today ? "is-today" : itemDate < today ? "is-past" : "";
@@ -2222,7 +2266,13 @@ function renderRunSchedule() {
       <div class="schedule-date"><strong>${escapeHtml(formatDate(itemDate))}</strong><span>D${item.task_day}</span></div>
       <div><span class="schedule-kind">${escapeHtml(kindLabel)}</span><h4>${escapeHtml(item.title)}</h4>${detail ? `<p>${escapeHtml(detail)}</p>` : ""}</div>
     </article>`;
-  }).join("") || '<div class="empty-state">This protocol has no scheduled tasks.</div>';
+  };
+  const months = window.ScheduleCalendar?.buildMonths(schedule) || [];
+  els.runSchedule.innerHTML = months.length ? months.map((month) => `<section class="interactive-calendar-month">
+    <h4>${escapeHtml(new Intl.DateTimeFormat(window.getAppLocale?.() || "en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${month.key}-01T12:00:00Z`)))}</h4>
+    <div class="interactive-calendar-weekdays">${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => `<span>${escapeHtml(day)}</span>`).join("")}</div>
+    <div class="interactive-calendar-grid">${month.cells.map((cell) => cell ? `<div class="interactive-calendar-day ${cell.date === today ? "is-today" : ""}" data-calendar-date="${escapeHtml(cell.date)}"><time datetime="${escapeHtml(cell.date)}">${cell.day}</time><div>${cell.entries.map(scheduleItem).join("")}</div></div>` : '<div class="interactive-calendar-day is-empty"></div>').join("")}</div>
+  </section>`).join("") : '<div class="empty-state">This protocol has no scheduled tasks.</div>';
 }
 
 function protocolsForSourceWell(vesselId, wellName, excludedRunId = null) {
@@ -2376,14 +2426,43 @@ function renderDifferentiationLineageSummary() {
 
   if (resolution.error) {
     els.differentiationCellLineSummary.innerHTML = `<span class="lineage-summary-warning">${escapeHtml(resolution.error)}</span>`;
+    renderDifferentiationPlatePlan([]);
     return;
   }
   if (names.length === 0) {
     els.differentiationCellLineSummary.innerHTML = '<span>Choose a source to inherit its cell lines.</span>';
+    renderDifferentiationPlatePlan([]);
     return;
   }
   const prefix = resolution.isSnapshot ? "Saved lineage snapshot" : "Inherited automatically";
   els.differentiationCellLineSummary.innerHTML = `<strong>${escapeHtml(names.join(" + "))}</strong><small>${escapeHtml(prefix)}</small>`;
+  renderDifferentiationPlatePlan(resolution.ids);
+}
+
+function currentDifferentiationPlatePlan() {
+  if (!els.differentiationPlatePlan) return [];
+  return Array.from(els.differentiationPlatePlan.querySelectorAll("[data-lineage-plate-plan]")).map((row) => ({
+    cell_line_id: row.dataset.cellLineId,
+    plate_type: valueOrNull(row.querySelector('[name="lineage_plate_type"]')?.value),
+    quantity: Math.max(0, numberOrNull(row.querySelector('[name="lineage_plate_quantity"]')?.value) ?? 0),
+  })).filter((entry) => entry.cell_line_id && entry.plate_type && entry.quantity > 0);
+}
+
+function renderDifferentiationPlatePlan(lineageIds, savedPlan = null) {
+  if (!els.differentiationPlatePlan) return;
+  const livePlan = currentDifferentiationPlatePlan();
+  const editingRun = state.differentiationRuns.find((run) => run.id === els.differentiationRunForm?.elements.id?.value);
+  const plan = savedPlan || livePlan.length ? (savedPlan || livePlan) : (Array.isArray(editingRun?.plate_plan) ? editingRun.plate_plan : []);
+  const byLine = new Map(plan.map((entry) => [entry.cell_line_id, entry]));
+  els.differentiationPlatePlan.innerHTML = lineageIds.length ? lineageIds.map((id) => {
+    const line = state.cellLines.find((candidate) => candidate.id === id);
+    const entry = byLine.get(id) || { quantity: 1, plate_type: "6 well" };
+    return `<div class="lineage-plate-row" data-lineage-plate-plan data-cell-line-id="${escapeHtml(id)}">
+      <strong>${escapeHtml(cellLineDisplayName(line))}</strong>
+      <label>Quantity<input name="lineage_plate_quantity" type="number" min="0" step="1" value="${escapeHtml(entry.quantity ?? 1)}"></label>
+      <label>Plate type<select name="lineage_plate_type">${plateTypeOptionsHtml(entry.plate_type || "6 well").replace('<option value="">No plate</option>', '')}</select></label>
+    </div>`;
+  }).join("") : '<div class="empty-state">Select the batch source to configure plates by cell line.</div>';
 }
 
 function renderCultureItem(culture) {
@@ -2937,7 +3016,6 @@ function renderAuthState() {
 function renderAll() {
   renderAuthState();
   renderOptions();
-  renderMemberSelectors();
   renderCellLines();
   renderCultures();
   renderVessels();
@@ -3002,6 +3080,11 @@ async function ensureCurrentProfile() {
 
 function isMissingTableError(error) {
   return error?.code === "PGRST205" || /Could not find the table/i.test(error?.message || "");
+}
+
+function isMissingRpcError(error) {
+  return error?.code === "PGRST202"
+    || /function .* does not exist|could not find the function/i.test(error?.message || "");
 }
 
 function isMissingColumnError(error, columnName) {
@@ -3405,6 +3488,43 @@ async function syncCultureResponsibilities(cultureId, userIds) {
   return error || null;
 }
 
+async function syncCultureCellLines(cultureId, cellLineIds) {
+  const requestedIds = uniqueValues(cellLineIds || []);
+  const { error: rpcError } = await db.rpc("set_culture_cell_lines", {
+    culture_id_arg: cultureId,
+    cell_line_ids_arg: requestedIds,
+  });
+  if (!rpcError) return null;
+
+  // Keep older installations usable until the atomic relationship migration is
+  // deployed. Other RPC failures must not be hidden by the compatibility path.
+  if (!isMissingRpcError(rpcError)) return rpcError;
+
+  const { error: insertError } = await db
+    .from("culture_cell_lines")
+    .upsert(requestedIds.map((cellLineId) => ({ culture_id: cultureId, cell_line_id: cellLineId })), {
+      onConflict: "culture_id,cell_line_id",
+    });
+  if (insertError) return insertError;
+
+  const { data: existingLinks, error: readError } = await db
+    .from("culture_cell_lines")
+    .select("cell_line_id")
+    .eq("culture_id", cultureId);
+  if (readError) return readError;
+
+  const obsoleteIds = (existingLinks || [])
+    .map((link) => link.cell_line_id)
+    .filter((cellLineId) => !requestedIds.includes(cellLineId));
+  if (!obsoleteIds.length) return null;
+  const { error: deleteError } = await db
+    .from("culture_cell_lines")
+    .delete()
+    .eq("culture_id", cultureId)
+    .in("cell_line_id", obsoleteIds);
+  return deleteError || null;
+}
+
 async function handleProjectSubmit(event) {
   event.preventDefault();
   if (!ensureDb()) return;
@@ -3620,12 +3740,7 @@ async function handleCultureSubmit(event) {
   }
 
   const cultureId = savedCulture?.id || editingId;
-  const { error: clearLinesError } = await db.from("culture_cell_lines").delete().eq("culture_id", cultureId);
-  if (clearLinesError) {
-    showToast(`Culture saved, but cell lines could not be updated: ${clearLinesError.message}`);
-    return;
-  }
-  const { error: linkLinesError } = await db.from("culture_cell_lines").insert(cellLineIds.map((cellLineId) => ({ culture_id: cultureId, cell_line_id: cellLineId })));
+  const linkLinesError = await syncCultureCellLines(cultureId, cellLineIds);
   if (linkLinesError) {
     showToast(`Culture saved, but cell lines could not be linked: ${linkLinesError.message}`);
     return;
@@ -4288,6 +4403,11 @@ async function toggleScheduledTask(button) {
   const completed = completionEventForItem(run, item);
   button.disabled = true;
   if (completed) {
+    if (typeof window.confirm === "function"
+      && !window.confirm("Reopen this completed task? Its completion record will be removed from Activity.")) {
+      button.disabled = false;
+      return;
+    }
     const { error } = await db.from("differentiation_events").delete().eq("id", completed.id);
     if (error) {
       button.disabled = false;
@@ -4332,6 +4452,22 @@ function openTaskDeferral(button) {
   els.deferTaskForm.reset();
   els.deferTaskForm.elements.day_shift.value = "1";
   els.deferTaskSummary.textContent = `${item.title} is scheduled for ${formatDate(dateValueString(item.date))}. Use a negative number to move it earlier or a positive number to move it later. This task and all later protocol tasks will move together.`;
+  els.deferTaskDialog.showModal();
+}
+
+function openDraggedTaskDeferral(source, targetDate) {
+  const run = state.differentiationRuns.find((item) => item.id === source.dataset.dragRun);
+  if (!run) return;
+  const item = actionableScheduleItems(run).find((candidate) => candidate.kind === source.dataset.dragKind
+    && Number(candidate.task_day) === Number(source.dataset.dragDay)
+    && (!source.dataset.dragId || candidate.id === source.dataset.dragId)
+    && Number(candidate.scheduled_activity_index || 0) === Number(source.dataset.dragActivity || 0));
+  const shift = protocolDayForDate(source.dataset.dragDate, targetDate);
+  if (!item || !shift) return;
+  pendingTaskDeferral = { run, item };
+  els.deferTaskForm.reset();
+  els.deferTaskForm.elements.day_shift.value = String(shift);
+  els.deferTaskSummary.textContent = `${item.title} will move from ${formatDate(source.dataset.dragDate)} to ${formatDate(targetDate)}. All later protocol activities will move ${Math.abs(shift)} day${Math.abs(shift) === 1 ? "" : "s"} ${shift > 0 ? "later" : "earlier"}.`;
   els.deferTaskDialog.showModal();
 }
 
@@ -4565,7 +4701,7 @@ async function handleDifferentiationRunSubmit(event) {
     source_wells_arg: selectedWells,
   };
   if (sourceType === "vessel") rpcArgs.source_vessel_ids_arg = selectedVesselIds;
-  const { error } = sourceType === "vessel"
+  const { data: savedRunId, error } = sourceType === "vessel"
     ? await db.rpc("save_multi_vessel_differentiation_run", rpcArgs)
     : await db.rpc("save_differentiation_run", rpcArgs);
 
@@ -4573,6 +4709,18 @@ async function handleDifferentiationRunSubmit(event) {
     submit.disabled = false;
     showToast(`Error saving differentiation: ${error.message}`);
     return;
+  }
+
+  const platePlan = currentDifferentiationPlatePlan();
+  const runId = editingId || savedRunId;
+  if (runId) {
+    const schedulePreferences = { media_cadence: valueOrNull(data.get("media_cadence")) || "preferred" };
+    const { error: planError } = await db.from("differentiation_runs").update({ plate_plan: platePlan, schedule_preferences: schedulePreferences }).eq("id", runId);
+    if (planError) {
+      submit.disabled = false;
+      showToast(`Differentiation saved, but the plate plan could not be saved: ${planError.message}`);
+      return;
+    }
   }
 
   submit.disabled = false;
@@ -4664,8 +4812,35 @@ function setupTabs() {
       setActiveView(tabs[next].dataset.view);
     });
   });
-  const activeTab = tabs.find((tab) => tab.classList.contains("is-active")) || tabs[0];
-  if (activeTab) setActiveView(activeTab.dataset.view);
+  const requestedView = (() => {
+    try {
+      return decodeURIComponent(window.location.hash.slice(1));
+    } catch {
+      return "";
+    }
+  })();
+  const storedView = (() => {
+    try {
+      return window.localStorage?.getItem(ACTIVE_VIEW_KEY) || "";
+    } catch {
+      return "";
+    }
+  })();
+  const activeTab = tabs.find((tab) => tab.dataset.view === requestedView)
+    || tabs.find((tab) => tab.dataset.view === storedView)
+    || tabs.find((tab) => tab.classList.contains("is-active"))
+    || tabs[0];
+  const hasViewHash = tabs.some((tab) => tab.dataset.view === requestedView);
+  if (activeTab) setActiveView(activeTab.dataset.view, { updateHash: !window.location.hash || hasViewHash });
+  window.addEventListener("hashchange", () => {
+    let hashView = "";
+    try {
+      hashView = decodeURIComponent(window.location.hash.slice(1));
+    } catch {
+      return;
+    }
+    if (tabs.some((tab) => tab.dataset.view === hashView)) setActiveView(hashView, { updateHash: false });
+  });
 }
 
 function setupMobileMenu() {
@@ -4700,7 +4875,8 @@ function setupMobileMenu() {
   });
 }
 
-function setActiveView(viewId) {
+function setActiveView(viewId, options = {}) {
+  if (![...document.querySelectorAll(".tab")].some((tab) => tab.dataset.view === viewId)) return;
   let activeTab = null;
   document.querySelectorAll(".tab").forEach((item) => {
     const isActive = item.dataset.view === viewId;
@@ -4724,6 +4900,14 @@ function setActiveView(viewId) {
     if (tabsBounds && !window.matchMedia("(max-width: 760px)").matches && (tabBounds.left < tabsBounds.left || tabBounds.right > tabsBounds.right)) {
       activeTab.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
     }
+  }
+  try {
+    window.localStorage?.setItem(ACTIVE_VIEW_KEY, viewId);
+  } catch {
+    // Navigation remains functional when browser storage is unavailable.
+  }
+  if (options.updateHash !== false && window.location.hash !== `#${encodeURIComponent(viewId)}`) {
+    window.history.replaceState(null, "", `#${encodeURIComponent(viewId)}`);
   }
 }
 
@@ -4753,6 +4937,7 @@ function resetterForCollapsibleEditor(formId) {
 function openCollapsibleEditor(formId) {
   const form = document.getElementById(formId);
   if (!form) return;
+  if (!confirmDiscardForm(form)) return;
   resetterForCollapsibleEditor(formId)?.({ keepOpen: true });
   setCollapsibleEditorOpen(form, true);
   form.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -4787,6 +4972,42 @@ function bindBusyForm(form, handler) {
         submitter.removeAttribute("aria-busy");
       }
     }
+  });
+}
+
+function confirmDiscardForm(form) {
+  return !form || !dirtyForms.has(form)
+    || window.confirm("Discard the unsaved changes in this form?");
+}
+
+function cancelFormEdit(form, resetter) {
+  if (!confirmDiscardForm(form)) return;
+  resetter();
+}
+
+function setupUnsavedFormProtection() {
+  const trackedForms = [
+    els.projectForm,
+    els.cellLineForm,
+    els.cultureForm,
+    els.vesselForm,
+    els.cryoBoxForm,
+    els.protocolForm,
+    els.protocolTaskForm,
+    els.differentiationRunForm,
+    els.eventForm,
+  ].filter(Boolean);
+
+  trackedForms.forEach((form) => {
+    form.addEventListener("input", () => dirtyForms.add(form));
+    form.addEventListener("change", () => dirtyForms.add(form));
+    form.addEventListener("reset", () => window.queueMicrotask(() => dirtyForms.delete(form)));
+  });
+
+  window.addEventListener("beforeunload", (event) => {
+    if (!trackedForms.some((form) => dirtyForms.has(form))) return;
+    event.preventDefault();
+    event.returnValue = "";
   });
 }
 
@@ -5004,6 +5225,7 @@ async function initAuth() {
 function setupForms() {
   setupProgressiveDisclosure();
   setupCollapsibleEditors();
+  setupUnsavedFormProtection();
   els.membersList?.addEventListener("click", handleMembersListClick);
   els.membersList?.addEventListener("change", handleMembersListChange);
   els.memberSearchInput?.addEventListener("input", renderMembers);
@@ -5103,6 +5325,31 @@ function setupForms() {
     const deferButton = event.target.closest("[data-defer-schedule-task]");
     if (deferButton) openTaskDeferral(deferButton);
   }));
+  els.runSchedule.addEventListener("dragstart", (event) => {
+    const task = event.target.closest('[data-drag-run]');
+    if (!task) return;
+    task.classList.add("is-dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", task.dataset.dragDate);
+  });
+  els.runSchedule.addEventListener("dragend", (event) => {
+    event.target.closest('[data-drag-run]')?.classList.remove("is-dragging");
+    els.runSchedule.querySelectorAll(".is-drop-target").forEach((target) => target.classList.remove("is-drop-target"));
+  });
+  els.runSchedule.addEventListener("dragover", (event) => {
+    const target = event.target.closest('[data-calendar-date]');
+    if (!target || target.classList.contains("is-dragging")) return;
+    event.preventDefault();
+    els.runSchedule.querySelectorAll(".is-drop-target").forEach((entry) => entry.classList.remove("is-drop-target"));
+    target.classList.add("is-drop-target");
+  });
+  els.runSchedule.addEventListener("drop", (event) => {
+    const target = event.target.closest('[data-calendar-date]');
+    const source = els.runSchedule.querySelector(".schedule-task.is-dragging");
+    if (!target || !source) return;
+    event.preventDefault();
+    openDraggedTaskDeferral(source, target.dataset.calendarDate);
+  });
   els.addPlateButton.addEventListener("click", openPlateForm);
   els.addPlateSetup.addEventListener("click", () => addPlateSetupRow());
   els.plateSetupList.addEventListener("click", (event) => {
@@ -5146,15 +5393,15 @@ function setupForms() {
   });
   els.deleteSelectedVials.addEventListener("click", handleDeleteSelectedVials);
   els.thawSelectedVials.addEventListener("click", handleThawSelectedVials);
-  els.cancelCellLineEdit.addEventListener("click", resetCellLineForm);
-  els.cancelCultureEdit.addEventListener("click", resetCultureForm);
-  els.cancelVesselEdit.addEventListener("click", resetVesselForm);
-  els.cancelCryoBoxEdit.addEventListener("click", resetCryoBoxForm);
-  els.cancelProtocolEdit.addEventListener("click", resetProtocolForm);
-  els.cancelProtocolTaskEdit.addEventListener("click", resetProtocolTaskForm);
-  els.cancelDifferentiationRunEdit.addEventListener("click", resetDifferentiationRunForm);
-  els.cancelEventEdit.addEventListener("click", resetEventForm);
-  els.cancelProjectEdit.addEventListener("click", resetProjectForm);
+  els.cancelCellLineEdit.addEventListener("click", () => cancelFormEdit(els.cellLineForm, resetCellLineForm));
+  els.cancelCultureEdit.addEventListener("click", () => cancelFormEdit(els.cultureForm, resetCultureForm));
+  els.cancelVesselEdit.addEventListener("click", () => cancelFormEdit(els.vesselForm, resetVesselForm));
+  els.cancelCryoBoxEdit.addEventListener("click", () => cancelFormEdit(els.cryoBoxForm, resetCryoBoxForm));
+  els.cancelProtocolEdit.addEventListener("click", () => cancelFormEdit(els.protocolForm, resetProtocolForm));
+  els.cancelProtocolTaskEdit.addEventListener("click", () => cancelFormEdit(els.protocolTaskForm, resetProtocolTaskForm));
+  els.cancelDifferentiationRunEdit.addEventListener("click", () => cancelFormEdit(els.differentiationRunForm, resetDifferentiationRunForm));
+  els.cancelEventEdit.addEventListener("click", () => cancelFormEdit(els.eventForm, resetEventForm));
+  els.cancelProjectEdit.addEventListener("click", () => cancelFormEdit(els.projectForm, resetProjectForm));
   els.speciesSelect.addEventListener("change", syncConditionalFields);
   els.cellTypeSelect.addEventListener("change", syncConditionalFields);
   els.initialCellTypeSelect.addEventListener("change", syncConditionalFields);
@@ -5167,6 +5414,7 @@ function setupForms() {
   els.protocolProjectSelect.addEventListener("change", syncConditionalFields);
   els.runProjectSelect.addEventListener("change", syncConditionalFields);
   els.differentiationSourceType.addEventListener("change", syncDifferentiationSourceFields);
+  els.differentiationProtocolSelect.addEventListener("change", syncProtocolSchedulePreferenceFields);
   els.differentiationCultureSelect.addEventListener("change", renderDifferentiationLineageSummary);
   els.differentiationVesselSelect.addEventListener("change", syncDifferentiationSourceFields);
   els.differentiationVesselCheckboxes.addEventListener("change", renderDifferentiationLineageSummary);
@@ -5179,6 +5427,16 @@ function setupForms() {
 function syncDifferentiationSourceFields() {
   renderDifferentiationWellCheckboxes();
   renderDifferentiationLineageSummary();
+  syncProtocolSchedulePreferenceFields();
+}
+
+function syncProtocolSchedulePreferenceFields() {
+  const protocol = state.differentiationProtocols.find((item) => item.id === els.differentiationProtocolSelect?.value);
+  const showTrujilloCadence = isTrujilloOrganoidProtocol(protocol);
+  els.trujilloMediaCadenceLabel?.classList.toggle("is-hidden", !showTrujilloCadence);
+  if (!showTrujilloCadence && els.differentiationRunForm?.elements.media_cadence) {
+    els.differentiationRunForm.elements.media_cadence.value = "preferred";
+  }
 }
 
 function syncActivityTargetFields() {
@@ -5682,6 +5940,8 @@ function fillDifferentiationRunForm(run) {
   setFieldValue(form, "run_name", run.run_name);
   setSelectOrCustom(els.runProjectSelect, form.elements.custom_project, run.project || projectForDifferentiationRun(run));
   setFieldValue(form, "protocol_id", run.protocol_id);
+  setFieldValue(form, "media_cadence", run.schedule_preferences?.media_cadence || "preferred");
+  syncProtocolSchedulePreferenceFields();
   setFieldValue(form, "start_date", protocolStartFromDayZero(run.day_zero_date));
   setFieldValue(form, "source_type", run.source_type || "culture");
   setFieldValue(form, "source_culture_id", run.source_culture_id);
@@ -5697,6 +5957,7 @@ function fillDifferentiationRunForm(run) {
     .map((well) => well.well);
   setCheckedValues(els.differentiationWellCheckboxes, runWells);
   renderDifferentiationLineageSummary();
+  renderDifferentiationPlatePlan(cellLineIdsForRun(run.id), Array.isArray(run.plate_plan) ? run.plate_plan : []);
 
   els.differentiationRunSubmitButton.textContent = "Update differentiation";
   els.cancelDifferentiationRunEdit.classList.remove("is-hidden");

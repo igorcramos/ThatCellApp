@@ -379,4 +379,10 @@
   .media-component-card { grid-template-columns: minmax(0, 1fr); }
   .media-component-actions { justify-content: flex-end; }
   .media-inline-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr); }
+  .media-step-badge,
+  .media-summary-card span,
+  .media-results td::before,
+  .media-result-formula { font-size: .8rem; }
+  .media-component-actions button,
+  .media-toolbar-actions button { min-height: var(--touch-target); }
 }

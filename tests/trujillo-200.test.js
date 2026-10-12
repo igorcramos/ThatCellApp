@@ -28,7 +28,7 @@ const ctx = vm.createContext({ state, window: { getAppLanguage: () => language }
 vm.runInContext(app.slice(app.indexOf('function automaticMediumForDay('), app.indexOf('function completionEventForItem(')), ctx);
 for (const lang of ['en', 'pt']) {
   language = lang;
-  const schedule = ctx.buildRunSchedule({ id: 'r', protocol_id: 'p', day_zero_date: '2026-09-13' });
+  const schedule = ctx.buildRunSchedule({ id: 'r', protocol_id: 'p', day_zero_date: '2026-09-10' });
   const intermediate = schedule.filter(item => item.kind === 'automatic' && item.task_day <= 31);
   assert.ok(intermediate.length > 0);
   assert.ok(intermediate.every(item => [1, 3, 5].includes(new Date(`${item.date}T12:00:00Z`).getUTCDay())));
@@ -39,7 +39,15 @@ for (const lang of ['en', 'pt']) {
   assert.equal(schedule.filter(item => item.task_day === 11).length, 2);
 }
 protocol.automatic_media_changes = false;
-assert.equal(ctx.buildRunSchedule({ id: 'r', protocol_id: 'p', day_zero_date: '2026-09-13' }).filter(item => item.kind === 'automatic').length, 0);
+assert.equal(ctx.buildRunSchedule({ id: 'r', protocol_id: 'p', day_zero_date: '2026-09-10' }).filter(item => item.kind === 'automatic').length, 0);
+protocol.automatic_media_changes = true;
+const alternativeSchedule = ctx.buildRunSchedule({ id: 'r-alt', protocol_id: 'p', day_zero_date: '2026-09-11', schedule_preferences: { media_cadence: 'alternative' } });
+const alternative = alternativeSchedule.filter(item => item.kind === 'automatic' && item.task_day <= 31);
+assert.ok(alternative.length > 0);
+assert.ok(alternative.every(item => [0, 2, 4].includes(new Date(`${item.date}T12:00:00Z`).getUTCDay())), 'alternative cadence uses Tuesday, Thursday and Sunday');
+const mediumDays = [...new Set(alternativeSchedule.filter(item => item.task_day >= 4 && item.task_day <= 31 && item.medium).map(item => item.task_day))].sort((a, b) => a - b);
+assert.ok(mediumDays.every((day, index) => index === 0 || day - mediumDays[index - 1] > 1), 'alternative cadence avoids consecutive-day changes');
+assert.ok(mediumDays.every((day, index) => index === 0 || day - mediumDays[index - 1] <= 3), 'alternative cadence never leaves more than three days between changes');
 assert.match(sql, /source\.automatic_media_changes/);
 assert.match(sql, /true, true\)/);
 assert.match(sql, /task\.title_pt/);

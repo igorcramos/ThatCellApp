@@ -6,6 +6,7 @@ const reagentChecklistState = {
   profiles: [],
   selectedListId: null,
   migrationAvailable: true,
+  loading: null,
 };
 
 const reagentChecklistEls = {
@@ -230,14 +231,21 @@ function renderReagentChecklists() {
 
 async function loadReagentChecklists() {
   if (!db || !reagentChecklistEls.select || (state.authAvailable && !state.session)) return;
+  if (reagentChecklistState.loading) return reagentChecklistState.loading;
   reagentChecklistEls.status.textContent = reagentChecklistTranslate("Loading material lists…");
-  const [listsResult, itemsResult, sessionsResult, entriesResult, profilesResult] = await Promise.all([
+  const cachedProfiles = Array.isArray(state.profiles) && state.profiles.length ? state.profiles : null;
+  reagentChecklistState.loading = Promise.all([
     db.from("reagent_checklists").select("*").order("name"),
     db.from("reagent_checklist_items").select("*, reagent_catalog(*)").order("sort_order"),
     db.from("reagent_check_sessions").select("*").order("checked_on", { ascending: false }),
     db.from("reagent_check_entries").select("*"),
-    db.from("profiles").select("id, full_name, email, is_active").eq("is_active", true).order("full_name"),
+    cachedProfiles
+      ? Promise.resolve({ data: cachedProfiles.filter((profile) => profile.is_active !== false), error: null })
+      : db.from("profiles").select("id, full_name, email, is_active").eq("is_active", true).order("full_name"),
   ]);
+  const [listsResult, itemsResult, sessionsResult, entriesResult, profilesResult] = await reagentChecklistState.loading.finally(() => {
+    reagentChecklistState.loading = null;
+  });
   const error = listsResult.error || itemsResult.error || sessionsResult.error || entriesResult.error || profilesResult.error;
   if (error) {
     reagentChecklistState.migrationAvailable = !isMissingTableError(error);
@@ -480,7 +488,9 @@ reagentChecklistEls.history?.addEventListener("click", (event) => {
   reagentChecklistEls.checkForm.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 window.addEventListener("app:languagechange", renderReagentChecklists);
-document.addEventListener("reagents:loaded", loadReagentChecklists);
+document.addEventListener("reagents:loaded", (event) => {
+  if (event.detail?.catalog !== false) renderReagentChecklistCatalogOptions(reagentChecklistEls.catalog?.value || "");
+});
 
 if (reagentChecklistEls.checkDate) reagentChecklistEls.checkDate.value = reagentChecklistToday();
 loadReagentChecklists();

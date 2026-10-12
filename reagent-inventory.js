@@ -1,4 +1,4 @@
-const reagentState = { catalog: [], items: [], aliquots: [], selectedItemId: null };
+const reagentState = { catalog: [], items: [], aliquots: [], selectedItemId: null, loading: null };
 
 const reagentEls = {
   form: document.querySelector("#reagentItemForm"),
@@ -36,8 +36,8 @@ function matchingCatalog(query) {
 
 function renderReagentLibraryResults() {
   const results = matchingCatalog(reagentEls.librarySearch.value);
-  reagentEls.libraryResults.innerHTML = results.length ? results.map((reagent) => `
-    <button class="reagent-library-option" type="button" role="option" data-catalog-id="${escapeHtml(reagent.id)}">
+  reagentEls.libraryResults.innerHTML = results.length ? results.map((reagent, index) => `
+    <button class="reagent-library-option" type="button" role="option" id="reagent-library-option-${escapeHtml(reagent.id)}" aria-selected="false" tabindex="${index === 0 ? "0" : "-1"}" data-catalog-id="${escapeHtml(reagent.id)}">
       <strong>${escapeHtml(reagent.name)}</strong>
       <span>${escapeHtml([reagent.manufacturer, reagent.catalog_number, reagent.category].filter(Boolean).join(" · "))}</span>
     </button>`).join("") : '<div class="empty-state">No library reagent matches this search.</div>';
@@ -49,6 +49,8 @@ function selectCatalogReagent(id) {
   reagentEls.form.elements.catalog_reagent_id.value = reagent.id;
   reagentEls.librarySearch.value = reagentCatalogLabel(reagent);
   reagentEls.libraryResults.classList.remove("is-open");
+  reagentEls.librarySearch.setAttribute("aria-expanded", "false");
+  reagentEls.librarySearch.removeAttribute("aria-activedescendant");
   if (!reagentEls.form.elements.location.value && reagent.default_storage) {
     reagentEls.form.elements.location.placeholder = `Suggested storage: ${reagent.default_storage}`;
   }
@@ -135,25 +137,27 @@ function editReagentItem(id) {
   openReagentForm();
 }
 
-async function loadReagentInventory() {
+async function loadReagentInventory({ catalog = true, items = true, aliquots = true } = {}) {
   if (!ensureDb()) return;
-  const [catalogResult, itemsResult, aliquotsResult] = await Promise.all([
-    db.from("reagent_catalog").select("*").order("name"),
-    db.from("reagent_inventory_items").select("*, reagent_catalog(*)").order("created_at", { ascending: false }),
-    db.from("reagent_aliquots").select("*").order("created_at", { ascending: false }),
+  if (reagentState.loading) return reagentState.loading;
+  reagentState.loading = Promise.all([
+    catalog ? db.from("reagent_catalog").select("*").order("name") : Promise.resolve({ data: reagentState.catalog, error: null }),
+    items ? db.from("reagent_inventory_items").select("*, reagent_catalog(*)").order("created_at", { ascending: false }) : Promise.resolve({ data: reagentState.items, error: null }),
+    aliquots ? db.from("reagent_aliquots").select("*").order("created_at", { ascending: false }) : Promise.resolve({ data: reagentState.aliquots, error: null }),
   ]);
+  const [catalogResult, itemsResult, aliquotsResult] = await reagentState.loading.finally(() => { reagentState.loading = null; });
   const error = catalogResult.error || itemsResult.error || aliquotsResult.error;
   if (error) {
     reagentEls.inventoryList.innerHTML = `<div class="empty-state">Reagent inventory unavailable. Run the reagent inventory migration.<br>${escapeHtml(error.message)}</div>`;
     return;
   }
-  reagentState.catalog = catalogResult.data || [];
-  reagentState.items = itemsResult.data || [];
-  reagentState.aliquots = aliquotsResult.data || [];
-  renderReagentLibraryResults();
-  renderReagentInventory();
-  if (reagentState.selectedItemId) renderAliquots();
-  document.dispatchEvent(new CustomEvent("reagents:loaded"));
+  if (catalog) reagentState.catalog = catalogResult.data || [];
+  if (items) reagentState.items = itemsResult.data || [];
+  if (aliquots) reagentState.aliquots = aliquotsResult.data || [];
+  if (catalog) renderReagentLibraryResults();
+  if (catalog || items || aliquots) renderReagentInventory();
+  if (reagentState.selectedItemId && (items || aliquots)) renderAliquots();
+  document.dispatchEvent(new CustomEvent("reagents:loaded", { detail: { catalog, items, aliquots } }));
 }
 
 async function handleReagentSubmit(event) {
@@ -176,7 +180,7 @@ async function handleReagentSubmit(event) {
   reagentEls.submit.disabled = false;
   if (error) { showToast(`Error saving reagent: ${error.message}`); return; }
   showToast(id ? "Inventory item updated." : "Reagent added to inventory.");
-  resetReagentForm(); await loadReagentInventory();
+  resetReagentForm(); await loadReagentInventory({ catalog: false, aliquots: false });
 }
 
 async function handleAliquotSubmit(event) {
@@ -185,12 +189,44 @@ async function handleAliquotSubmit(event) {
   const payload = { inventory_item_id: data.get("inventory_item_id"), label: valueOrNull(data.get("label")), quantity: Number(data.get("quantity")), unit: valueOrNull(data.get("unit")), location: valueOrNull(data.get("location")), prepared_at: valueOrNull(data.get("prepared_at")), expiration_date: valueOrNull(data.get("expiration_date")), status: data.get("status"), notes: valueOrNull(data.get("notes")) };
   const { error } = await db.from("reagent_aliquots").insert(payload);
   if (error) { showToast(`Error saving aliquot: ${error.message}`); return; }
-  showToast("Aliquot saved."); await loadReagentInventory();
+  showToast("Aliquot saved."); await loadReagentInventory({ catalog: false, items: false });
   event.currentTarget.reset(); event.currentTarget.elements.inventory_item_id.value = reagentState.selectedItemId;
 }
 
-reagentEls.librarySearch.addEventListener("focus", () => { renderReagentLibraryResults(); reagentEls.libraryResults.classList.add("is-open"); });
-reagentEls.librarySearch.addEventListener("input", () => { reagentEls.form.elements.catalog_reagent_id.value = ""; renderReagentLibraryResults(); reagentEls.libraryResults.classList.add("is-open"); });
+function openReagentLibraryResults() {
+  renderReagentLibraryResults();
+  reagentEls.libraryResults.classList.add("is-open");
+  reagentEls.librarySearch.setAttribute("aria-expanded", "true");
+}
+
+function handleReagentLibraryKeydown(event) {
+  if (!["ArrowDown", "ArrowUp", "Enter", "Escape"].includes(event.key)) return;
+  const options = [...reagentEls.libraryResults.querySelectorAll("[data-catalog-id]")];
+  if (event.key === "Escape") {
+    reagentEls.libraryResults.classList.remove("is-open");
+    reagentEls.librarySearch.setAttribute("aria-expanded", "false");
+    reagentEls.librarySearch.removeAttribute("aria-activedescendant");
+    return;
+  }
+  if (!options.length) return;
+  event.preventDefault();
+  const activeId = reagentEls.librarySearch.getAttribute("aria-activedescendant");
+  let index = options.findIndex((option) => option.id === activeId);
+  if (event.key === "Enter" && index >= 0) return selectCatalogReagent(options[index].dataset.catalogId);
+  index = event.key === "ArrowUp" ? (index <= 0 ? options.length - 1 : index - 1) : (index + 1) % options.length;
+  options.forEach((option, optionIndex) => { option.tabIndex = optionIndex === index ? 0 : -1; });
+  reagentEls.librarySearch.setAttribute("aria-activedescendant", options[index].id);
+  options[index].scrollIntoView({ block: "nearest" });
+}
+
+reagentEls.librarySearch.setAttribute("role", "combobox");
+reagentEls.librarySearch.setAttribute("aria-autocomplete", "list");
+reagentEls.librarySearch.setAttribute("aria-controls", reagentEls.libraryResults.id);
+reagentEls.librarySearch.setAttribute("aria-expanded", "false");
+reagentEls.libraryResults.setAttribute("role", "listbox");
+reagentEls.librarySearch.addEventListener("focus", openReagentLibraryResults);
+reagentEls.librarySearch.addEventListener("input", () => { reagentEls.form.elements.catalog_reagent_id.value = ""; openReagentLibraryResults(); });
+reagentEls.librarySearch.addEventListener("keydown", handleReagentLibraryKeydown);
 reagentEls.libraryResults.addEventListener("click", (event) => { const option = event.target.closest("[data-catalog-id]"); if (option) selectCatalogReagent(option.dataset.catalogId); });
 reagentEls.inventorySearch.addEventListener("input", renderReagentInventory);
 reagentEls.inventoryList.addEventListener("click", (event) => { const aliquot = event.target.closest("[data-aliquots]"); const edit = event.target.closest("[data-edit-reagent]"); if (aliquot) openAliquots(aliquot.dataset.aliquots); if (edit) editReagentItem(edit.dataset.editReagent); });
