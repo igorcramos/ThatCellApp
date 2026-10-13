@@ -1987,13 +1987,22 @@ function automaticMediumForDay(day) {
   return null;
 }
 
+function trujilloMediaPhases(run) {
+  const phase = (protocolDay, medium) => ({
+    startDay: adjustedRunDay(run.id, protocolDay),
+    medium,
+  });
+  return [
+    phase(32, "Medium 2 (maintenance)"),
+    phase(25, "Medium 3"),
+    phase(18, "Medium 2 + FGF2 + EGF"),
+    phase(11, "Medium 2 + FGF2"),
+    phase(4, "Medium 1"),
+  ];
+}
+
 function trujilloMediumForRunDay(run, runDay) {
-  const phases = [32, 25, 18, 11, 4].map((protocolDay) => ({
-    protocolDay,
-    runDay: adjustedRunDay(run.id, protocolDay),
-  }));
-  const phase = phases.find((candidate) => runDay >= candidate.runDay);
-  return phase ? automaticMediumForDay(phase.protocolDay) : null;
+  return trujilloMediaPhases(run).find((phase) => runDay >= phase.startDay)?.medium || null;
 }
 
 function hasMeaningfulProtocolValue(value) {
@@ -2033,12 +2042,16 @@ function protocolMediaSchedule(protocol, allProtocolTasks, run) {
     return { startDay, endDay: Infinity, preferredWeekdays: [2, 5], title: "Microglia medium change", medium: microgliaMedium };
   }
   if (isTrujilloOrganoidProtocol(protocol)) {
-    // Phase starts are D4, D11, D18 and D25. Between them the same medium is
-    // changed Monday/Wednesday/Friday, avoiding consecutive-day changes.
+    // Trujillo_200 and normalized Trujillo_Agg share the same fixed phases
+    // from Medium 1 onward. They differ only before D4: aggregation/induction
+    // uses a different D-1/D0 source convention.
     const alternativeCadence = run.schedule_preferences?.media_cadence === "alternative";
+    const phases = trujilloMediaPhases(run);
+    const maintenanceStartDay = phases[0].startDay;
     return {
-      startDay: adjustedRunDay(run.id, 4),
-      endDay: adjustedRunDay(run.id, 31),
+      startDay: phases.at(-1).startDay,
+      endDay: maintenanceStartDay - 1,
+      maintenanceStartDay,
       preferredWeekdays: alternativeCadence ? [0, 2, 4] : [1, 3, 5],
       title: "Medium change",
     };
@@ -2123,13 +2136,13 @@ function buildRunSchedule(run) {
   const hasMaintenancePhase = tasks.some((task) => /maintenance|organoids? formed/i.test(`${task.title || ""} ${task.medium || ""}`));
   const protocolDuration = Math.max(configuredDuration, importedDuration, hasMaintenancePhase ? 90 : 31);
   const duration = adjustedRunDay(run.id, protocolDuration);
-  const maintenanceStartDay = adjustedRunDay(run.id, 31);
   const protocolMediaRule = protocolMediaSchedule(protocol, allProtocolTasks, run);
+  const maintenanceStartDay = protocolMediaRule?.maintenanceStartDay ?? (adjustedRunDay(run.id, 31) + 1);
   const automaticChanges = [];
   for (let day = 3; protocol?.automatic_media_changes !== false && day <= duration; day += 1) {
     const date = addDateValueDays(run.day_zero_date, day);
     const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
-    const isMaintenancePhase = day > maintenanceStartDay;
+    const isMaintenancePhase = day >= maintenanceStartDay;
     const usesProtocolRule = protocolMediaRule && day >= protocolMediaRule.startDay && day <= protocolMediaRule.endDay;
     if (protocolMediaRule && !usesProtocolRule && isMicrogliaProtocol(protocol)) continue;
     const preferredWeekdays = usesProtocolRule ? protocolMediaRule.preferredWeekdays : (isMaintenancePhase ? [1, 4] : [1, 3, 5]);

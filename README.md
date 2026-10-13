@@ -84,6 +84,11 @@ Simple web app for cell culture tracking using Supabase.
     single transaction, preventing partially cleared lineage assignments when
     a request fails midway through an update.
 
+25. Run `supabase/2026-10-13_trujillo_fixed_media_phases.sql` and deploy the
+    updated `app.js` so Trujillo_200 and normalized Trujillo_Agg share fixed
+    seven-day medium phases from D4 onward, followed by Monday/Thursday
+    maintenance changes from D32.
+
 ## Login options
 
 The secure mode uses Supabase Auth with Google sign-in as the primary path, plus

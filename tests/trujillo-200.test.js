@@ -58,6 +58,23 @@ assert.ok(alternative.every(item => [0, 2, 4].includes(new Date(`${item.date}T12
 const mediumDays = [...new Set(alternativeSchedule.filter(item => item.task_day >= 4 && item.task_day <= 31 && item.medium).map(item => item.task_day))].sort((a, b) => a - b);
 assert.ok(mediumDays.every((day, index) => index === 0 || day - mediumDays[index - 1] > 1), 'alternative cadence avoids consecutive-day changes');
 assert.ok(mediumDays.every((day, index) => index === 0 || day - mediumDays[index - 1] <= 3), 'alternative cadence never leaves more than three days between changes');
+
+const aggProtocol = { ...protocol, id: 'agg', name: 'Trujillo_Agg', automatic_media_changes: true };
+state.differentiationProtocols = [aggProtocol];
+state.protocolTasks = seed.tasks.map((task, i) => ({ ...task, id: `agg-${i}`, protocol_id: 'agg' }));
+const aggSchedule = ctx.buildRunSchedule({ id: 'agg-run', protocol_id: 'agg', day_zero_date: '2026-09-10' });
+const expectedAggMedium = day => day >= 32 ? 'Medium 2 (maintenance)'
+  : day >= 25 ? 'Medium 3'
+    : day >= 18 ? 'Medium 2 + FGF2 + EGF'
+      : day >= 11 ? 'Medium 2 + FGF2'
+        : 'Medium 1';
+aggSchedule.filter(item => item.kind === 'automatic').forEach(item => {
+  assert.equal(item.medium, expectedAggMedium(item.task_day), `Trujillo_Agg D${item.task_day} uses its fixed phase medium`);
+});
+const aggMaintenance = aggSchedule.filter(item => item.kind === 'automatic' && item.task_day >= 32);
+assert.ok(aggMaintenance.length > 0);
+assert.ok(aggMaintenance.every(item => [1, 4].includes(new Date(`${item.date}T12:00:00Z`).getUTCDay())), 'Trujillo_Agg maintenance uses Monday and Thursday');
+
 assert.match(sql, /source\.automatic_media_changes/);
 assert.match(sql, /true, true\)/);
 assert.match(sql, /task\.title_pt/);
