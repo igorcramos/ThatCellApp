@@ -23,7 +23,6 @@ const ctx = vm.createContext({ state, window: { getAppLanguage: () => language }
   adjustedRunDay: (_, day) => day,
   addDateValueDays: (date, day) => new Date(Date.parse(date) + day * 86400000).toISOString().slice(0, 10),
   deviationsForRun: () => [], dateValueString: value => value,
-  automaticMediumForRunDay: () => 'legacy medium',
 });
 vm.runInContext(app.slice(app.indexOf('function automaticMediumForDay('), app.indexOf('function completionEventForItem(')), ctx);
 for (const lang of ['en', 'pt']) {
@@ -35,6 +34,17 @@ for (const lang of ['en', 'pt']) {
   [[4, 11], [11, 18], [18, 25], [25, 32]].forEach(([start, end]) => {
     assert.ok(intermediate.some(item => item.task_day > start && item.task_day < end), `medium ${start}–${end} has an intermediate change`);
   });
+  const expectedMedium = day => day >= 32 ? 'Medium 2 (maintenance)'
+    : day >= 25 ? 'Medium 3'
+      : day >= 18 ? 'Medium 2 + FGF2 + EGF'
+        : day >= 11 ? 'Medium 2 + FGF2'
+          : 'Medium 1';
+  schedule.filter(item => item.kind === 'automatic').forEach(item => {
+    assert.equal(item.medium, expectedMedium(item.task_day), `D${item.task_day} uses its fixed protocol phase medium`);
+  });
+  const maintenance = schedule.filter(item => item.kind === 'automatic' && item.task_day >= 32);
+  assert.ok(maintenance.length > 0);
+  assert.ok(maintenance.every(item => [1, 4].includes(new Date(`${item.date}T12:00:00Z`).getUTCDay())), 'maintenance uses Monday and Thursday');
   assert.equal(schedule.filter(item => item.task_day === 4).length, 2);
   assert.equal(schedule.filter(item => item.task_day === 11).length, 2);
 }

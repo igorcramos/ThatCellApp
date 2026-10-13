@@ -22,7 +22,6 @@ const ctx = vm.createContext({
   deviationsForRun: () => deviations,
   deviationTypeLabel: type => type,
   dateValueString: value => value,
-  automaticMediumForRunDay: () => 'fallback medium',
 });
 vm.runInContext(app.slice(app.indexOf('function automaticMediumForDay('), app.indexOf('function completionEventForItem(')), ctx);
 

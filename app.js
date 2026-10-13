@@ -1912,15 +1912,6 @@ function adjustedRunDay(runId, protocolDay) {
     .reduce((total, deviation) => total + Number(deviation.day_shift || 0), 0);
 }
 
-function automaticMediumForRunDay(run, runDay) {
-  const thresholds = [31, 24, 17, 10, 3].map((protocolDay) => ({
-    protocolDay,
-    runDay: adjustedRunDay(run.id, protocolDay),
-  }));
-  const stage = thresholds.find((threshold) => runDay >= threshold.runDay)?.protocolDay;
-  return stage === undefined ? null : automaticMediumForDay(stage);
-}
-
 function protocolDeviationFlag(run) {
   const deviations = deviationsForRun(run.id);
   if (!deviations.length) return "";
@@ -1988,12 +1979,21 @@ function renderDifferentiationRuns() {
 }
 
 function automaticMediumForDay(day) {
-  if (day >= 31) return "Medium 2 (maintenance)";
-  if (day >= 24) return "Medium 3";
-  if (day >= 17) return "Medium 2 + FGF2 + EGF";
-  if (day >= 10) return "Medium 2 + FGF2";
-  if (day >= 3) return "Medium 1";
+  if (day >= 32) return "Medium 2 (maintenance)";
+  if (day >= 25) return "Medium 3";
+  if (day >= 18) return "Medium 2 + FGF2 + EGF";
+  if (day >= 11) return "Medium 2 + FGF2";
+  if (day >= 4) return "Medium 1";
   return null;
+}
+
+function trujilloMediumForRunDay(run, runDay) {
+  const phases = [32, 25, 18, 11, 4].map((protocolDay) => ({
+    protocolDay,
+    runDay: adjustedRunDay(run.id, protocolDay),
+  }));
+  const phase = phases.find((candidate) => runDay >= candidate.runDay);
+  return phase ? automaticMediumForDay(phase.protocolDay) : null;
 }
 
 function hasMeaningfulProtocolValue(value) {
@@ -2144,9 +2144,11 @@ function buildRunSchedule(run) {
     const adjacentToExplicitChange = explicitMediumDays.has(day - 1) || explicitMediumDays.has(day + 1);
     const adjacentToAutomaticChange = automaticChanges.some((change) => Math.abs(change.task_day - day) <= 1);
     if ((isPreferredDay || needsSafetyChange) && !explicitMediumDays.has(day) && !adjacentToExplicitChange && !adjacentToAutomaticChange) {
-      const medium = (isMicrogliaProtocol(protocol) ? protocolMediaRule?.medium : carriedForwardMedium(tasks, day))
-        || carriedForwardMedium(tasks, day)
-        || (isTrujilloOrganoidProtocol(protocol) ? automaticMediumForRunDay(run, day) : null);
+      const medium = isMicrogliaProtocol(protocol)
+        ? protocolMediaRule?.medium
+        : isTrujilloOrganoidProtocol(protocol)
+          ? trujilloMediumForRunDay(run, day)
+          : carriedForwardMedium(tasks, day);
       automaticChanges.push({ kind: "automatic", task_day: day, date, title: usesProtocolRule ? protocolMediaRule.title : (isMaintenancePhase ? "Maintenance medium change" : "Medium change"), medium });
     }
   }
