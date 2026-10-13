@@ -13,4 +13,10 @@ set notes = concat_ws(E'\n\n', nullif(notes, ''), case when position('Fixed medi
     automatic_media_changes = true
 where lower(btrim(name)) like 'trujillo%agg%';
 
+update public.differentiation_protocols
+set notes = concat_ws(E'\n\n', nullif(notes, ''), case when position('Each seven-day pre-maintenance phase has three medium replacements' in coalesce(notes, '')) = 0 then 'Each seven-day pre-maintenance phase has three medium replacements, counting the phase-start replacement, using the Monday/Wednesday/Friday or Tuesday/Thursday/Sunday cadence while keeping no more than three days between replacements.' end),
+    notes_pt = concat_ws(E'\n\n', nullif(notes_pt, ''), case when position('Cada fase de sete dias antes da manutenção tem três trocas de meio' in coalesce(notes_pt, '')) = 0 then 'Cada fase de sete dias antes da manutenção tem três trocas de meio, contando a troca no início da fase, seguindo a cadência segunda/quarta/sexta ou terça/quinta/domingo e mantendo no máximo três dias entre trocas.' end)
+where lower(btrim(name)) = 'trujillo_200'
+   or lower(btrim(name)) like 'trujillo%agg%';
+
 commit;

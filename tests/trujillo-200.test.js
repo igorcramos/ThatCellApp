@@ -75,6 +75,21 @@ const aggMaintenance = aggSchedule.filter(item => item.kind === 'automatic' && i
 assert.ok(aggMaintenance.length > 0);
 assert.ok(aggMaintenance.every(item => [1, 4].includes(new Date(`${item.date}T12:00:00Z`).getUTCDay())), 'Trujillo_Agg maintenance uses Monday and Thursday');
 
+for (const cadence of ['preferred', 'alternative']) {
+  for (let startOffset = 0; startOffset < 7; startOffset += 1) {
+    state.differentiationProtocols = [protocol];
+    state.protocolTasks = seed.tasks.map((task, i) => ({ ...task, id: String(i), protocol_id: 'p' }));
+    const dayZero = ctx.addDateValueDays('2026-09-07', startOffset);
+    const candidate = ctx.buildRunSchedule({ id: `r-${cadence}-${startOffset}`, protocol_id: 'p', day_zero_date: dayZero, schedule_preferences: { media_cadence: cadence } });
+    [[4, 10], [11, 17], [18, 24], [25, 31]].forEach(([start, end]) => {
+      const changeDays = new Set(candidate
+        .filter(item => item.task_day >= start && item.task_day <= end && item.medium)
+        .map(item => item.task_day));
+      assert.equal(changeDays.size, 3, `${cadence} cadence has three medium changes in D${start}–D${end} when D0 offset is ${startOffset}`);
+    });
+  }
+}
+
 assert.match(sql, /source\.automatic_media_changes/);
 assert.match(sql, /true, true\)/);
 assert.match(sql, /task\.title_pt/);

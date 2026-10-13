@@ -2005,6 +2005,35 @@ function trujilloMediumForRunDay(run, runDay) {
   return trujilloMediaPhases(run).find((phase) => runDay >= phase.startDay)?.medium || null;
 }
 
+function trujilloPhaseChangeDays(run, preferredWeekdays) {
+  const starts = [...trujilloMediaPhases(run)].reverse().map((phase) => phase.startDay);
+  const plannedDays = new Set();
+  starts.slice(0, 4).forEach((startDay, index) => {
+    const nextStartDay = starts[index + 1];
+    plannedDays.add(startDay);
+    const candidates = [];
+    for (let first = startDay + 1; first < nextStartDay; first += 1) {
+      for (let second = first + 1; second < nextStartDay; second += 1) {
+        const gaps = [first - startDay, second - first, nextStartDay - second];
+        if (gaps.some((gap) => gap < 2 || gap > 3)) continue;
+        const weekdays = [first, second].map((day) => {
+          const date = addDateValueDays(run.day_zero_date, day);
+          return new Date(`${date}T12:00:00Z`).getUTCDay();
+        });
+        const preferredCount = weekdays.filter((weekday) => preferredWeekdays.includes(weekday)).length;
+        candidates.push({ first, second, preferredCount });
+      }
+    }
+    candidates.sort((a, b) => b.preferredCount - a.preferredCount || a.first - b.first || a.second - b.second);
+    const selected = candidates[0];
+    if (selected) {
+      plannedDays.add(selected.first);
+      plannedDays.add(selected.second);
+    }
+  });
+  return plannedDays;
+}
+
 function hasMeaningfulProtocolValue(value) {
   const normalized = String(value || "").trim();
   return Boolean(normalized && !["-", "–", "—"].includes(normalized));
@@ -2048,11 +2077,13 @@ function protocolMediaSchedule(protocol, allProtocolTasks, run) {
     const alternativeCadence = run.schedule_preferences?.media_cadence === "alternative";
     const phases = trujilloMediaPhases(run);
     const maintenanceStartDay = phases[0].startDay;
+    const preferredWeekdays = alternativeCadence ? [0, 2, 4] : [1, 3, 5];
     return {
       startDay: phases.at(-1).startDay,
       endDay: maintenanceStartDay - 1,
       maintenanceStartDay,
-      preferredWeekdays: alternativeCadence ? [0, 2, 4] : [1, 3, 5],
+      preferredWeekdays,
+      plannedChangeDays: trujilloPhaseChangeDays(run, preferredWeekdays),
       title: "Medium change",
     };
   }
@@ -2156,7 +2187,12 @@ function buildRunSchedule(run) {
       && day - latestChangeDay >= 3;
     const adjacentToExplicitChange = explicitMediumDays.has(day - 1) || explicitMediumDays.has(day + 1);
     const adjacentToAutomaticChange = automaticChanges.some((change) => Math.abs(change.task_day - day) <= 1);
-    if ((isPreferredDay || needsSafetyChange) && !explicitMediumDays.has(day) && !adjacentToExplicitChange && !adjacentToAutomaticChange) {
+    const isPlannedTrujilloChange = usesProtocolRule
+      && isTrujilloOrganoidProtocol(protocol)
+      && protocolMediaRule.plannedChangeDays.has(day);
+    const shouldChange = isPlannedTrujilloChange
+      || ((!usesProtocolRule || !isTrujilloOrganoidProtocol(protocol)) && (isPreferredDay || needsSafetyChange));
+    if (shouldChange && !explicitMediumDays.has(day) && !adjacentToExplicitChange && !adjacentToAutomaticChange) {
       const medium = isMicrogliaProtocol(protocol)
         ? protocolMediaRule?.medium
         : isTrujilloOrganoidProtocol(protocol)
