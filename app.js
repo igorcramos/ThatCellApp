@@ -1989,7 +1989,7 @@ function automaticMediumForDay(day) {
 
 function trujilloMediaPhases(run) {
   const phase = (protocolDay, medium) => ({
-    startDay: adjustedRunDay(run.id, protocolDay),
+    startDay: protocolDay,
     medium,
   });
   return [
@@ -1999,6 +1999,12 @@ function trujilloMediaPhases(run) {
     phase(11, "Medium 2 + FGF2"),
     phase(4, "Medium 1"),
   ];
+}
+
+function isFixedTrujilloMediumTask(protocol, task) {
+  if (!isTrujilloOrganoidProtocol(protocol)) return false;
+  const medium = `${task.medium || ""} ${task.medium_pt || ""}`;
+  return /(?:medium|meio)\s*[123]\b/i.test(medium);
 }
 
 function trujilloMediumForRunDay(run, runDay) {
@@ -2156,7 +2162,7 @@ function buildRunSchedule(run) {
     .filter((task) => hasMeaningfulProtocolValue(task.title) && !isReplacedByAutomaticSchedule(protocol, task, allProtocolTasks))
     .flatMap((task) => {
       const protocolDay = Number(task.task_day);
-      const runDay = adjustedRunDay(run.id, protocolDay);
+      const runDay = isFixedTrujilloMediumTask(protocol, task) ? protocolDay : adjustedRunDay(run.id, protocolDay);
       return protocolChecklistActivities(task).map((activity) => ({ ...activity, kind: "task", protocol_day: protocolDay, task_day: runDay, date: addDateValueDays(run.day_zero_date, runDay) }));
     });
   const isMediumTask = (task) => hasMeaningfulProtocolValue(task.medium)

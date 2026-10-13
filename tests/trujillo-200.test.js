@@ -18,11 +18,12 @@ const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 const protocol = { id: 'p', ...seed.protocol, automatic_media_changes: true };
 const state = { differentiationProtocols: [protocol], protocolTasks: seed.tasks.map((task, i) => ({ ...task, id: String(i), protocol_id: 'p' })), differentiationEvents: [] };
 let language = 'en';
+const deviations = [];
 const ctx = vm.createContext({ state, window: { getAppLanguage: () => language },
   localizedProtocolTask: task => ({ ...task }),
-  adjustedRunDay: (_, day) => day,
+  adjustedRunDay: (_, day) => Number(day) + deviations.filter(deviation => Number(day) > deviation.after_protocol_day).reduce((total, deviation) => total + deviation.day_shift, 0),
   addDateValueDays: (date, day) => new Date(Date.parse(date) + day * 86400000).toISOString().slice(0, 10),
-  deviationsForRun: () => [], dateValueString: value => value,
+  deviationsForRun: () => deviations, deviationTypeLabel: type => type, dateValueString: value => value,
 });
 vm.runInContext(app.slice(app.indexOf('function automaticMediumForDay('), app.indexOf('function completionEventForItem(')), ctx);
 for (const lang of ['en', 'pt']) {
@@ -89,6 +90,12 @@ for (const cadence of ['preferred', 'alternative']) {
     });
   }
 }
+
+deviations.push({ after_protocol_day: 28, day_shift: -1, deviation_type: 'shortened_phase', reason: 'test' });
+const deviatedSchedule = ctx.buildRunSchedule({ id: 'r-deviated', protocol_id: 'p', day_zero_date: '2026-09-10' });
+assert.ok(deviatedSchedule.some(item => item.kind === 'task' && item.protocol_day === 32 && item.task_day === 32), 'a deviation does not move fixed D32 maintenance');
+assert.equal(deviatedSchedule.find(item => item.kind === 'task' && item.protocol_day === 25)?.task_day, 25, 'a deviation does not move fixed Medium 3');
+deviations.length = 0;
 
 assert.match(sql, /source\.automatic_media_changes/);
 assert.match(sql, /true, true\)/);
